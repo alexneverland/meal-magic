@@ -1,9 +1,8 @@
 # Verification — 2026-11-05
 
-Version: **0.6.1**, source preview proposed through pull requests. Work was
-performed without subagents. No tagged release or agent-directory installation
-is implied by the source repository. Review/merge state is recorded in the
-corresponding pull request, not inferred from this report.
+Version: **0.6.1**, first public release. Work was performed without subagents.
+Review/merge state is recorded in the corresponding pull request. Release assets
+and the published tag identify the released commit.
 
 ## Executed
 
@@ -12,7 +11,8 @@ corresponding pull request, not inferred from this report.
 - Five new installer tests verify workflow reference installation, legacy manifest
   update/uninstall, protection of local edits/unknown files and refusal of partial
   manifests. The package verifies installed reference bytes. Workflow relocation
-  preserves the original detailed instructions; live reference-routing remains untested.
+  preserves the original detailed instructions; complete live reference-routing
+  comparison scenarios remain untested.
 - Fourteen new import tests verify complete cross-domain round trips preserving
   public IDs, exact Unicode/recipe content, favorites, member ownership, timestamps
   and plan revisions; schema-6 compatibility; type/date/field/reference validation;
@@ -119,11 +119,25 @@ corresponding pull request, not inferred from this report.
 
 ## Per-agent evidence
 
-### Agreed conversational test scope
+### Owner-authorized actual use and remaining test scope
 
-The project owner will perform the live acceptance scenarios in **Codex and
-Antigravity**, with isolated synthetic profiles. Those conversations are still
-pending; this section records responsibility and scope, not completed results.
+On 2026-11-05, the owner explicitly requested installation for actual use, followed
+by a cooking conversation. This was separate from development testing; no real
+profile was used by the automated test suite. The requested v0.6.1 installation
+used the owner's Codex personal skill directory.
+All nine installed files matched the source, and the installed CLI executed.
+Explicit invocation loaded the skill; the live conversation read the required
+references, initialized context, saved user-declared household/preferences and
+reused them before generating a quick recipe from supplied ingredients. The owner
+confirmed successful testing. Personal details from that session are intentionally
+excluded from this report, repository and release assets.
+
+This owner-authorized actual-use acceptance check is evidence for basic Codex use,
+not a synthetic development test or completion of the full acceptance suite
+or a controlled before/after reference-routing comparison. The exact desktop/model
+version for that live session was not captured. Fresh-chat automatic discovery,
+Antigravity conversations and remaining manual scenarios are still pending.
+Automated development tests continue to use only synthetic temporary profiles.
 
 **Claude Code remains conversationally untested by the maintainers.** Its
 installation instructions and shared storage/lifecycle tools are provided, and
@@ -138,15 +152,15 @@ each host. There is no claim that all agents discover or follow this skill.
 
 | Host | Local version observed | Actually tested | Not tested |
 |---|---|---|---|
-| Codex | `codex-cli 0.166.0-alpha.6` | Version command; documented path mapping; install/update/uninstall and installed helper in a temporary synthetic project. The current Codex chat authored and ran the tests. | Fresh-session automatic discovery, explicit invocation, and conversational behavior after installation. |
+| Codex | Earlier CLI observation: `codex-cli 0.166.0-alpha.6`; live desktop/model version not captured | Synthetic storage/lifecycle checks plus installed v0.6.1 live smoke test: explicit invocation, onboarding, saved-context reuse and ingredient-based recipe generation; owner confirmed success. | Fresh-session automatic discovery and the complete conversational acceptance suite. |
 | Claude Code | `2.1.159` | Version command; documented path mapping; install/update/uninstall and installed helper in a temporary synthetic project. | Live model session, automatic discovery, slash-command invocation, and conversational behavior. Current official docs may describe features newer than this local version. |
 | Antigravity CLI | `1.0.8` | Version command; documented path mapping; install/update/uninstall and installed helper in a temporary synthetic project. | Live CLI/App/IDE invocation, automatic discovery, and conversational behavior. |
 | Custom agents | No specific host | Explicit-directory installation and execution of the shared JSON CLI in a temporary destination. | Host registration, model behavior, tool permissions, or compatibility with any arbitrary custom agent. |
 
-No external model sessions were launched. No global agent installation or agent
-configuration was changed. Installation-layout tests are not evidence that each
-model follows the instructions. [Agent scenarios](tests/agent-scenarios.md) specify
-the live checks still needed before claiming tested conversational compatibility.
+The owner explicitly authorized the personal Codex installation and live use
+described above; no agent configuration was changed. Installation-layout tests
+alone are not evidence that each model follows the instructions.
+[Agent scenarios](tests/agent-scenarios.md) specify the broader live checks.
 No live-agent sessions were launched for the planning update. New conversational
 plan/shopping-list scenarios are provided for the owner, not recorded as passed.
 No live-agent sessions were launched for the member-history update either.
@@ -182,6 +196,7 @@ Official pages were opened and checked on 2026-11-05:
 The package is standalone. No external application's code, configuration,
 database or personal records is required, imported or bundled.
 
-No live-agent reference-routing evaluation was performed. Source preservation,
-link/installer/package checks do not prove unchanged model behavior; fresh-session
-comparison scenarios remain for the owner in Codex and Antigravity.
+The Codex smoke test exercised loading workflow references during normal use.
+Source preservation and link/installer/package checks do not prove unchanged model
+behavior; controlled fresh-session comparison scenarios remain for Codex and
+Antigravity.

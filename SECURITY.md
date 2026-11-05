@@ -35,8 +35,11 @@ description and request a private reporting channel before sending sensitive det
 There is no dedicated security email or response-time commitment at present.
 
 Provide the affected version, OS/Python version, impact, and the smallest synthetic
-reproduction. Supported development is the current `main` after initial merge;
-before that, use the open implementation PR. No versioned release is promised yet.
+reproduction. The current public release is **v0.6.1**; security reports are accepted
+for that release and the current `main` development source. Fixes are delivered
+through `main` and a subsequent release as appropriate; no long-term maintenance
+or separate backport policy is promised. Use the reporting channels above for
+released versions as well as development source.
 
 ## Boundaries to preserve
 

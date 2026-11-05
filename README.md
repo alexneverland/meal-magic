@@ -5,19 +5,22 @@ remember food preferences and restrictions, keep an actual meal history, and
 save recipes and favorites. One shared Python core works with Codex, Claude Code,
 Antigravity, and custom agents that can load instructions and execute local tools.
 
-**Version 0.6.1 — source preview, no tagged release yet.** Agent installation layouts
-are documented; live model-session compatibility is not yet certified. See
+**Version 0.6.1 — First Public Release.** Basic live use in Codex was observed on
+2026-11-05 and confirmed working by the project owner. See
 [VERIFICATION.md](VERIFICATION.md) for exactly what was tested.
 
 ## Agent testing status
 
-Our conversational acceptance tests will run in **Codex and Antigravity**, using
-isolated synthetic household profiles. This is the agreed test plan, not a claim
-that those conversations have already passed.
+At the owner's explicit request, v0.6.1 was installed for actual use in **Codex**:
+explicit skill invocation, household setup, saved context reuse and a quick meal
+recipe from supplied ingredients. The owner confirmed successful use. This is a
+user acceptance check, separate from synthetic development tests and not a pass
+of every acceptance scenario. Antigravity testing remains
+pending. Automated development tests use isolated synthetic profiles.
 
 | Host | Live conversational testing | Evidence so far |
 |---|---|---|
-| Codex | Planned tests by the maintainers | Storage/lifecycle tests and installation-path checks; live skill discovery and conversations still pending |
+| Codex | Basic live smoke test passed; owner confirmed | Installed v0.6.1, explicit invocation, household onboarding, stored-context reuse and ingredient-based recipe generation; automatic discovery in a fresh chat and the full scenario suite remain unverified |
 | Antigravity | Planned tests by the maintainers | Storage/lifecycle tests and installation-path checks; live App/CLI/IDE conversations still pending |
 | Claude Code | Not tested conversationally by the maintainers; community reports welcome | Documented installation and tested storage/lifecycle path; no verified live-model behavior |
 | Custom agents | Each integration needs its own validation | Shared JSON CLI and explicit-directory installer tested; no blanket host compatibility claim |
@@ -72,7 +75,7 @@ encrypted data. The single-user SQLite file uses normal OS file permissions.
 
 Repository: [alexneverland/meal-magic](https://github.com/alexneverland/meal-magic).
 
-Use `main` for the merged source:
+Use `main` for the latest merged source (including release preparation):
 
 ```text
 git clone https://github.com/alexneverland/meal-magic.git
@@ -83,11 +86,11 @@ python tools/manage_skill.py install --agent codex
 ```
 
 Choose `--agent claude-code` or `--agent antigravity` instead of `codex` as needed.
-For an unmerged change, select its PR branch explicitly instead. A source preview
-on `main` is not a tagged release or a claim of completed conversational testing.
+For the fixed release snapshot, choose tag `v0.6.1` once published on the
+repository's Releases page. For an unmerged change, select its PR branch explicitly.
 
 To inspect an unmerged change, clone its PR branch explicitly in a separate checkout.
-Back up an existing data directory before using this preview: its first successful
+Back up an existing data directory before upgrading: its first successful
 storage request upgrades the database to schema 7.
 
 Alternatively, download a source ZIP using GitHub's **Code → Download ZIP** on
