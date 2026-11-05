@@ -119,9 +119,12 @@ and the published tag identify the released commit.
 
 ## Per-agent evidence
 
-### Agreed conversational test scope
+### Owner-authorized actual use and remaining test scope
 
-On 2026-11-05, v0.6.1 was installed in the owner's Codex personal skill directory.
+On 2026-11-05, the owner explicitly requested installation for actual use, followed
+by a cooking conversation. This was separate from development testing; no real
+profile was used by the automated test suite. The requested v0.6.1 installation
+used the owner's Codex personal skill directory.
 All nine installed files matched the source, and the installed CLI executed.
 Explicit invocation loaded the skill; the live conversation read the required
 references, initialized context, saved user-declared household/preferences and
@@ -129,7 +132,8 @@ reused them before generating a quick recipe from supplied ingredients. The owne
 confirmed successful testing. Personal details from that session are intentionally
 excluded from this report, repository and release assets.
 
-This is evidence for basic Codex use, not completion of the full acceptance suite
+This owner-authorized actual-use acceptance check is evidence for basic Codex use,
+not a synthetic development test or completion of the full acceptance suite
 or a controlled before/after reference-routing comparison. The exact desktop/model
 version for that live session was not captured. Fresh-chat automatic discovery,
 Antigravity conversations and remaining manual scenarios are still pending.

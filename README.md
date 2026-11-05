@@ -5,16 +5,17 @@ remember food preferences and restrictions, keep an actual meal history, and
 save recipes and favorites. One shared Python core works with Codex, Claude Code,
 Antigravity, and custom agents that can load instructions and execute local tools.
 
-**Version 0.6.1 — First Public Release.** Basic live use in Codex was tested on
+**Version 0.6.1 — First Public Release.** Basic live use in Codex was observed on
 2026-11-05 and confirmed working by the project owner. See
 [VERIFICATION.md](VERIFICATION.md) for exactly what was tested.
 
 ## Agent testing status
 
-Basic conversational use was tested in **Codex** after installing v0.6.1:
+At the owner's explicit request, v0.6.1 was installed for actual use in **Codex**:
 explicit skill invocation, household setup, saved context reuse and a quick meal
 recipe from supplied ingredients. The owner confirmed successful use. This is a
-smoke test, not a pass of every acceptance scenario. Antigravity testing remains
+user acceptance check, separate from synthetic development tests and not a pass
+of every acceptance scenario. Antigravity testing remains
 pending. Automated development tests use isolated synthetic profiles.
 
 | Host | Live conversational testing | Evidence so far |
@@ -74,10 +75,10 @@ encrypted data. The single-user SQLite file uses normal OS file permissions.
 
 Repository: [alexneverland/meal-magic](https://github.com/alexneverland/meal-magic).
 
-Use the release tag for the first public release:
+Use `main` for the latest merged source (including release preparation):
 
 ```text
-git clone --branch v0.6.1 https://github.com/alexneverland/meal-magic.git
+git clone https://github.com/alexneverland/meal-magic.git
 cd meal-magic
 python --version
 python -m unittest discover -s tests -v
@@ -85,8 +86,8 @@ python tools/manage_skill.py install --agent codex
 ```
 
 Choose `--agent claude-code` or `--agent antigravity` instead of `codex` as needed.
-Use `main` for the latest merged development source. For an unmerged change,
-select its PR branch explicitly instead.
+For the fixed release snapshot, choose tag `v0.6.1` once published on the
+repository's Releases page. For an unmerged change, select its PR branch explicitly.
 
 To inspect an unmerged change, clone its PR branch explicitly in a separate checkout.
 Back up an existing data directory before upgrading: its first successful
