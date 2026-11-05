@@ -290,6 +290,10 @@ replacement with a new request key; reuse the key of the replacement on retries.
 These are two separate transactions: if interrupted after removal, report that
 the replacement is not yet recorded and retry that replacement. Do not silently
 delete meal history to remove a member: linked-member removal refuses.
+Meal-log receipts survive event removal; replaying the old key returns a historical
+response and never recreates the removed event. Check `meal-list` for current state.
+Disclose that removal clears the active event and links but retains original
+request/response text for retry safety; do not describe it as complete erasure.
 
 ## Data and failures
 

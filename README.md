@@ -88,7 +88,7 @@ on `main` is not a tagged release or a claim of completed conversational testing
 
 To inspect an unmerged change, clone its PR branch explicitly in a separate checkout.
 Back up an existing data directory before using this preview: its first successful
-storage request upgrades the database to schema 5.
+storage request upgrades the database to schema 6.
 
 Alternatively, download a source ZIP using GitHub's **Code → Download ZIP** on
 the chosen branch, extract it, and open a terminal beside this README and `tools/`.
@@ -301,11 +301,13 @@ overwrite option. Prefer running the helper as a CLI. On Windows, reparse points
 are checked without following them on every supported Python version, including
 3.10/3.11; project paths retain their original spelling until this check runs.
 
-The manager never opens the personal database. v0.5 uses schema version 5. On the
-first successful storage request, the helper upgrades schema 1, 2, 3 or 4 transactionally.
+The manager never opens the personal database. v0.5 uses schema version 6. On the
+first successful storage request, the helper upgrades schema 1, 2, 3, 4 or 5 transactionally.
 Schema 1 gains household members, onboarding state and nullable preference
 ownership; schema 2 gains locale and declared observances; schema 3 gains empty
 plan storage and retry receipts; schema 4 gains an empty meal/member relation.
+Schema 5 gains durable meal-log receipts backfilled from currently active events.
+Keys for events already deleted before this upgrade cannot be recovered.
 Older meals remain unspecified and historical meal request keys remain retryable. Existing IDs/content,
 favorites, history, members and ownership remain intact. Old unassigned
 preferences stay unassigned. No family, age, location, belief or practice is
@@ -313,7 +315,8 @@ invented. A completed/skipped schema-2 introduction stays completed/skipped.
 
 Back up the data directory before upgrading. The schema change rolls back if it
 fails. Unknown schema versions/foreign databases are refused, never reset. Once
-schema 5 is committed, v0.1/v0.2/v0.3/v0.4 cannot read it: to roll back, stop all clients
+schema 6 is committed, older helpers (including schema-5 previews) cannot read it:
+to roll back, stop all clients
 and restore the matching pre-upgrade data backup, preserving newer data separately.
 
 ## First-use introduction and family meals
@@ -603,6 +606,13 @@ Member removal refuses linked actual meals rather than erasing history. Event
 removal deletes only that event and its membership links. If a user requests a
 membership correction, removing the incorrect event and recording a replacement
 are separate transactions; an interrupted replacement must be reported and retried.
+
+Meal-log receipts retain the original request/response and member IDs after removal,
+so retrying an old key returns its original receipt without recreating a deleted
+meal. Use current listings to establish whether an event is active. Removal clears
+the active event and links, not all retained text. JSON export excludes internal
+meal receipts, just as it excludes plan receipts. Complete erasure requires the
+separate, deliberate whole-data-directory removal described above.
 
 ## Testing and limits
 

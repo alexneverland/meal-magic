@@ -35,8 +35,8 @@ Precedence: `--data-dir PATH`, then `MEAL_MAGIC_DATA_DIR`, then:
 The file is `meal-magic.sqlite3`. Relative overrides resolve against the process
 working directory; prefer absolute paths. The tool refuses data inside its own
 installed skill. Each command uses a SQLite transaction, foreign keys and a
-10-second lock timeout. Failure rolls the transaction back. Schema version 5 is
-created lazily. Schemas 1/2/3/4 are upgraded transactionally and additively on the first
+10-second lock timeout. Failure rolls the transaction back. Schema version 6 is
+created lazily. Schemas 1/2/3/4/5 are upgraded transactionally and additively on the first
 successful request; IDs/content/favorites/history/members/ownership survive.
 Schema-1 preferences gain null ownership and pending onboarding; schema-2
 onboarding status stays unchanged. Locale starts empty with unknown holiday
@@ -44,7 +44,9 @@ interest; no practices/beliefs are inferred. Back up data before upgrading.
 Schema 3 gains empty plans and mutation receipts without changing earlier records.
 Schema 4 gains an empty meal/member relation; old events retain unspecified
 membership and old meal request payloads remain unchanged and retryable.
-Older schema-1/2/3/4 helpers cannot read the upgraded database;
+Schema 5 gains durable meal-log receipts, backfilled from all currently active
+events and their member links. It cannot recover keys for events already removed
+before this upgrade. Older schema-1/2/3/4/5 helpers cannot read the upgraded database;
 restore the pre-upgrade backup if reverting. Unknown versions or foreign databases
 are refused, never reset.
 The tool does not prune history. Listing limits do not delete stored records.
@@ -188,12 +190,23 @@ consumption/variety use `kind=eaten`; a cooked event is not evidence of eating.
 Reordering `member_ids` is the same retry; changing the member set with the same
 request key fails `request_key_conflict`. Old schema-4 meal keys still replay with
 omitted or empty membership without adding events or rewriting historical payloads.
+Durable meal-log receipts survive event removal. A retry returns the original
+saved response without recreating the event or its member links, even if those
+members have since been removed. The response is a historical receipt, not proof
+the event is still active; `meal-list` establishes current history. The same key
+with changed fields still conflicts. Basic field validation happens before receipt
+lookup, while existing member/recipe checks apply only to new events.
 `meal-remove` deletes only the selected event and its membership links. It never
 deletes members or other meals. `member-remove` refuses a member linked to any meal
 with `member_has_meals_remove_events_explicitly`. Do not delete events just to
 bypass this guard. A user-authorized membership correction removes the incorrect
 event and logs a replacement with a new key; these are separate transactions, so
 report and recover an interrupted replacement explicitly.
+
+Removal deletes active event/link rows, not all retained meal text: `meal_requests`
+keeps the original request/response for retry safety, including former member IDs.
+`export` includes active meals only, not these internal receipts. Complete erasure
+requires deliberate removal of the whole data directory as described in README.
 
 ```json
 {"action":"meal-log","request_key":"synthetic-member-meal","kind":"eaten","name":"Separate synthetic dinner","occurred_on":"2026-11-05","member_ids":["returned-member-id"]}

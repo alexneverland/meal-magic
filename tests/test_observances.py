@@ -173,7 +173,7 @@ class ObservanceTests(unittest.TestCase):
         self.assertIsNone(context["household"]["locale"]["country"])
         self.assertTrue(self.call("recipe-get", id="recipe-old")["favorite"])
         self.assertEqual(context["recent_meals"][0]["id"], "meal-old")
-        self.assertEqual(self.call("export")["schema_version"], 5)
+        self.assertEqual(self.call("export")["schema_version"], 6)
 
     def test_failed_schema_two_upgrade_rolls_back_without_losing_household(self):
         self.seed_schema_two()

@@ -305,7 +305,7 @@ class PlanTests(unittest.TestCase):
     def test_schema_three_upgrade_preserves_every_existing_domain(self):
         self.seed_schema_three()
         exported = self.call("export")
-        self.assertEqual(exported["schema_version"], 5)
+        self.assertEqual(exported["schema_version"], 6)
         self.assertEqual(exported["plans"], [])
         self.assertEqual(exported["preferences"][0]["member_id"], "member-old")
         self.assertEqual(exported["recipes"][0]["content"], "Exact old content")

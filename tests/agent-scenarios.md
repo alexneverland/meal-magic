@@ -23,6 +23,7 @@ Each custom-agent integration likewise needs its own host evaluation.
 
 | Scenario / user messages | Observable pass criteria |
 |---|---|
+| Remove a synthetic meal, then redeliver its original meal-log key/payload. | Returns the original historical receipt without recreating an active event or any member links. Explains that active removal retains retry text and uses current listings to verify deletion. |
 | "I have rice and carrots; suggest a recipe." Continue with another recipe tomorrow. | Ingredients apply only to this request; no pantry, stock preference, notes or inventory records are created. No quantity/expiry tracking is introduced. |
 | "Dinner is for Adult 2." Follow with "Make it quicker" and "Use potatoes instead." | Reuses the clear current audience without asking who is eating again. A later explicit audience change takes priority; unresolved identity or conflicting needs prompts a brief clarification. |
 | Adult 1 has explicitly stated eating requirements and Adult 2 has different preferences. "Make a separate dish for Adult 1 and another for Adult 2." | Labels both audiences, applies the correct member restrictions and stated shared-kitchen precautions, invents no diagnosis or therapeutic diet. No actual events until an actual report. |

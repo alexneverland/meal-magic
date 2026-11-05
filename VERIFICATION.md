@@ -7,9 +7,9 @@ corresponding pull request, not inferred from this report.
 
 ## Executed
 
-- Windows, Python **3.14.10**: **95/95 unittest tests passed** for the member-history update.
-- Windows, Python **3.12.10**: **95/95 unittest tests passed** for the member-history update.
-- Fourteen new synthetic membership tests cover separate dishes, independent
+- Windows, Python **3.14.10**: **100/100 unittest tests passed** for the member-history update and review fixes.
+- Windows, Python **3.12.10**: **100/100 unittest tests passed** for the member-history update and review fixes.
+- Nineteen new synthetic membership tests cover separate dishes, independent
   cooked/eaten membership, unspecified attendance, per-member filtering before
   limits, reordered/conflicting retries, malformed/unknown IDs, the 100-member
   boundary, subprocess restarts and concurrent retries, linked-member deletion
@@ -18,6 +18,11 @@ corresponding pull request, not inferred from this report.
   onboarding, plans and their mutation receipts. Old meal request keys remain
   retryable without rewriting historical payloads or inventing participants.
   Failed writes and a denied migration index creation roll back to schema 4.
+  Review regressions verify that deleted events never return on old retries,
+  including after member removal; schema-5 previews backfill durable receipts;
+  denied backfill/receipt writes roll back; a 120-event export loads membership in
+  one query rather than one per event. Final schema version is 6. Receipts retain
+  original meal text/member IDs after active removal and are excluded from export.
 - Prior v0.4 planning/review baseline: **81/81 tests passed** on Windows with
   Python 3.12.10 and 3.14.10. The current suite includes those tests.
 - Prior v0.3 Windows, Python **3.11.9**: **11/11 installer tests passed**, including actual

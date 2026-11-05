@@ -4,7 +4,7 @@
 
 **Goal:** Record explicitly reported members on actual meal events and retrieve each member's history.
 
-**Architecture:** Add a schema-5 meal/member relation with foreign keys. Keep the shared standard-library JSON CLI and host-model reasoning. Ingredients remain conversational only; no pantry, quantities or expiry storage is added.
+**Architecture:** Add a schema-5 meal/member relation with foreign keys and schema-6 durable meal receipts. Keep the shared standard-library JSON CLI and host-model reasoning. Ingredients remain conversational only; no pantry, quantities or expiry storage is added.
 
 **Tech Stack:** Python 3.10+, SQLite, unittest.
 
@@ -46,3 +46,12 @@
 - [x] Extend extracted-package smoke test to retrieve member-scoped history after update.
 - [x] Run repository checks, full tests, whitespace checks and source ZIP build/CRC/allowlist inspection.
 Delivery: review the full diff, stage only named files, commit/push the branch and propose a PR to main. Do not merge or publish a release.
+
+## Review follow-up
+
+The owner subsequently authorized merge and feature-branch cleanup once review findings and validation were handled.
+
+- [x] Reproduce removed-meal resurrection and per-event membership export queries.
+- [x] Retain durable meal-log request/response receipts independently of active events, including migration/backfill from schema-5 previews; document retention and historical replay semantics.
+- [x] Load exported membership in one query and bounded meal listings in one batch query.
+- [x] Verify 100 synthetic tests on Windows/Python 3.12 and 3.14, including five review regressions; rebuild and inspect the source ZIP.

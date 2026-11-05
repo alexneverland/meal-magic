@@ -35,6 +35,7 @@ class MealMemberTests(unittest.TestCase):
         """Downgrade only this synthetic fixture to the actual schema-4 layout."""
         meal = self.log()
         with closing(sqlite3.connect(self.store.path)) as con:
+            con.execute("DROP TABLE IF EXISTS meal_requests")
             con.execute("DROP TABLE IF EXISTS meal_members")
             payload = json.loads(con.execute("SELECT request_payload FROM meals").fetchone()[0])
             payload.pop("member_ids", None)
@@ -85,6 +86,82 @@ class MealMemberTests(unittest.TestCase):
         for members in ([self.one["id"]], [], [self.two["id"]]):
             with self.subTest(members=members), self.assertRaisesRegex(StoreError, "request_key_conflict"):
                 self.log(member_ids=members)
+        self.assertEqual(self.call("meal-list"), [saved])
+
+    def test_deleted_event_retry_returns_receipt_without_recreating_membership(self):
+        saved = self.log(member_ids=[self.one["id"]])
+        self.call("meal-remove", id=saved["id"])
+        self.call("member-remove", id=self.one["id"])
+        self.assertEqual(self.log(member_ids=[self.one["id"]]), saved)
+        self.assertEqual(self.call("meal-list"), [])
+        with self.assertRaisesRegex(StoreError, "request_key_conflict"):
+            self.log(member_ids=[self.one["id"]], name="Changed synthetic soup")
+        with closing(sqlite3.connect(self.store.path)) as con:
+            self.assertEqual(con.execute("SELECT COUNT(*) FROM meals").fetchone()[0], 0)
+            self.assertEqual(con.execute("SELECT COUNT(*) FROM meal_members").fetchone()[0], 0)
+
+    def test_schema_five_preview_backfills_durable_receipts_before_deletion(self):
+        saved = self.log(member_ids=[self.one["id"]])
+        with closing(sqlite3.connect(self.store.path)) as con:
+            con.execute("DROP TABLE IF EXISTS meal_requests")
+            con.execute("PRAGMA user_version=5")
+            con.commit()
+        self.call("meal-remove", id=saved["id"])
+        self.assertEqual(self.log(member_ids=[self.one["id"]]), saved)
+        self.assertEqual(self.call("meal-list", member_id=self.one["id"]), [])
+        self.assertEqual(self.call("export")["schema_version"], 6)
+
+    def test_receipt_failure_rolls_back_meal_and_member_links(self):
+        with closing(sqlite3.connect(self.store.path)) as con:
+            con.execute("CREATE TRIGGER fail_receipt BEFORE INSERT ON meal_requests "
+                        "BEGIN SELECT RAISE(ABORT,'synthetic receipt failure'); END")
+            con.commit()
+        with self.assertRaises(sqlite3.IntegrityError):
+            self.log(member_ids=[self.one["id"]])
+        self.assertEqual(self.call("meal-list"), [])
+        with closing(sqlite3.connect(self.store.path)) as con:
+            self.assertEqual(con.execute("SELECT COUNT(*) FROM meal_members").fetchone()[0], 0)
+            self.assertEqual(con.execute("SELECT COUNT(*) FROM meal_requests").fetchone()[0], 0)
+            con.execute("DROP TRIGGER fail_receipt")
+            con.commit()
+        saved = self.log(member_ids=[self.one["id"]])
+        self.assertEqual(self.call("meal-list"), [saved])
+
+    def test_export_loads_memberships_in_one_query_for_large_history(self):
+        for index in range(120):
+            self.log(str(index), member_ids=[self.one["id"]] if index % 2 else [])
+        statements = []
+        real_connect = sqlite3.connect
+        def connect(*args, **kwargs):
+            con = real_connect(*args, **kwargs)
+            con.set_trace_callback(statements.append)
+            return con
+        with patch.object(store_module.sqlite3, "connect", side_effect=connect):
+            result = self.call("export")
+        self.assertEqual(len(result["meals"]), 120)
+        self.assertEqual(sum(meal["member_ids"] == [self.one["id"]] for meal in result["meals"]), 60)
+        membership_reads = [sql for sql in statements if sql.lstrip().upper().startswith("SELECT")
+                            and "meal_members" in sql]
+        self.assertEqual(len(membership_reads), 1)
+
+    def test_receipt_backfill_failure_preserves_schema_five_preview(self):
+        saved = self.log(member_ids=[self.one["id"]])
+        real_connect = sqlite3.connect
+        with closing(real_connect(self.store.path)) as con:
+            con.execute("DROP TABLE IF EXISTS meal_requests")
+            con.execute("PRAGMA user_version=5")
+            con.commit()
+        def connect(*args, **kwargs):
+            con = real_connect(*args, **kwargs)
+            con.set_authorizer(lambda action, name, *unused: sqlite3.SQLITE_DENY
+                               if action == sqlite3.SQLITE_INSERT and name == "meal_requests" else sqlite3.SQLITE_OK)
+            return con
+        with patch.object(store_module.sqlite3, "connect", side_effect=connect):
+            with self.assertRaises(sqlite3.DatabaseError):
+                self.call("context")
+        with closing(real_connect(self.store.path)) as con:
+            self.assertEqual(con.execute("PRAGMA user_version").fetchone()[0], 5)
+            self.assertIsNone(con.execute("SELECT name FROM sqlite_master WHERE name='meal_requests'").fetchone())
         self.assertEqual(self.call("meal-list"), [saved])
 
     def test_invalid_and_unknown_members_fail_without_partial_events(self):
@@ -178,7 +255,7 @@ class MealMemberTests(unittest.TestCase):
         before = self.call("export")
         legacy = self.legacy_profile()
         result = self.call("export")
-        self.assertEqual(result["schema_version"], 5)
+        self.assertEqual(result["schema_version"], 6)
         self.assertEqual(result["recipes"], [recipe])
         self.assertEqual(result["preferences"], [pref])
         self.assertEqual(result["plans"], [plan])
@@ -193,7 +270,7 @@ class MealMemberTests(unittest.TestCase):
         self.assertEqual(self.call("meal-list", member_id=self.one["id"]), [])
         with closing(sqlite3.connect(self.store.path)) as con:
             self.assertNotIn("member_ids", json.loads(con.execute("SELECT request_payload FROM meals").fetchone()[0]))
-            self.assertEqual(con.execute("PRAGMA user_version").fetchone()[0], 5)
+            self.assertEqual(con.execute("PRAGMA user_version").fetchone()[0], 6)
 
     def test_failed_write_rolls_back_schema_four_migration(self):
         legacy = self.legacy_profile()
