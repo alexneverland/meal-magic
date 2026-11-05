@@ -1,6 +1,6 @@
 ---
 name: meal-magic
-description: Suggest and plan meals around family preferences, restrictions and occasions; keep shopping lists, log actual meals, and save or retrieve recipes and favorites.
+description: Suggest and plan meals around family preferences, restrictions, occasions and declared fasting practices; keep shopping lists, log actual meals, and save or retrieve recipes and favorites.
 ---
 
 # Meal Magic
@@ -216,7 +216,10 @@ or assert a precise budget without verified prices.
 If the user asks to save/remember the plan (or has authorized ongoing plan saving),
 use `plan-save`. Otherwise show a conversational draft. Do not save separate recipe
 records just because a dish appears in a plan. `plan-list` discovers saved plans;
-fetch by ID before retrieval/editing, and clarify ambiguous choices. Before
+use `offset` with the same filters/limit to read older pages instead of exporting
+the full private profile. Continue until a short/empty page, rechecking IDs if
+another agent edits the collection while paging.
+Fetch by ID before retrieval/editing, and clarify ambiguous choices. Before
 recommending an old plan, recheck current restrictions; saved content is historical,
 not automatically suitable for changed preferences or another date.
 

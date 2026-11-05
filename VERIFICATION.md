@@ -7,8 +7,8 @@ corresponding pull request, not inferred from this report.
 
 ## Executed
 
-- Windows, Python **3.14.10**: **75/75 unittest tests passed** for the planning change.
-- Windows, Python **3.12.10**: **75/75 unittest tests passed** for the planning change.
+- Windows, Python **3.14.10**: **81/81 unittest tests passed** for the planning change and review fixes.
+- Windows, Python **3.12.10**: **81/81 unittest tests passed** for the planning change and review fixes.
 - Prior v0.3 Windows, Python **3.11.9**: **11/11 installer tests passed**, including actual
   junction target/ancestor/content and project-alias regressions. The new regressions
   first reproduced failures against the previous implementation on Python 3.11.
@@ -25,13 +25,18 @@ corresponding pull request, not inferred from this report.
   failures, and concurrent writes from eight processes.
   Preference qualifications survive omitted notes on exact repeats and ownership
   updates; clearing requires an explicit empty string, and invalid null rolls back.
-- Fifteen plan tests verify separate plan storage, exact process-restart retrieval,
+- Twenty-one plan tests verify separate plan storage, exact process-restart retrieval,
   per-day replacement with a full revised shopping list, revision conflicts,
   simultaneous writers, historical receipt replay after updates/deletion, explicit
   removal, malformed nested payloads, notes preservation, date overlap listing,
   migration from schema 3 preserving existing domains, and transactional rollback
   on receipt failure or a failed write during migration. Quantities are text and
   were not interpreted/summed by Python; ingredient totals remain host-model work.
+  Review regressions check JSON-type-sensitive retries (including booleans vs
+  integers/floats), unknown-field error precedence, complete paging over 105 plans,
+  invalid offsets, and the actual traced listing queries' indexed execution without
+  temporary ordering sorts. Existing schema-4 previews gain the listing index
+  without changing plan data.
 - Household tests verified persistent members/stages, independent per-member
   preferences, partial member updates, nonrepeating onboarding state storage,
   skipping/restarting without data loss, explicit unknown-vs-none-reported allergy

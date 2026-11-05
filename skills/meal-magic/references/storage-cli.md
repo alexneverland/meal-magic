@@ -49,7 +49,9 @@ The tool does not prune history. Listing limits do not delete stored records.
 
 ## Actions
 
-Fields not listed for the action are rejected. IDs returned by the tool are opaque.
+Fields not listed for the action are rejected as `unknown_fields` before opening
+the database or checking mutation receipts. This takes precedence over
+`request_key_conflict` for retries with unknown top-level fields. IDs are opaque.
 The model selects actions based on the user's meaning. No tool parses conversational
 intent or decides whether an ingredient meets dietary requirements.
 
@@ -73,7 +75,7 @@ intent or decides whether an ingredient meets dietary requirements.
 | `meal-remove` | `id` | — | Removed ID |
 | `plan-save` | `request_key`, `title`, `meals`, `shopping_list`; also `id`, `expected_revision` for update | `notes` | Complete saved plan/list snapshot |
 | `plan-get` | `id` | — | Current complete plan/list snapshot |
-| `plan-list` | — | `on` (ISO date), `limit` | Compact plans; optional inclusive date-span overlap |
+| `plan-list` | — | `on` (ISO date), `limit`, `offset` | Compact plans; optional inclusive date-span overlap and paging |
 | `plan-remove` | `id`, `expected_revision`, `request_key` | — | Removed plan ID |
 | `export` | — | — | Household/onboarding, all preferences, recipes, meals and current plans, schema version |
 
@@ -215,7 +217,15 @@ request key. Same-title plans coexist. The response includes `id`, `revision`
 (initially 1), `created_at`, `updated_at`, `start_on`, `end_on`, and the document.
 Dates span the earliest/latest planned meal; `plan-list` with `on` finds any plan
 whose span covers that date, even if no meal is entered for that exact day. Lists
-are newest start-date first and compact; get/export returns all stored content.
+are newest start-date first (then updated time descending and ID ascending) and
+compact; get/export returns all stored content. `limit` is 1–100 (default 20);
+`offset` is a nonnegative integer below 2^63 (default 0). Increase offset by the
+page size with unchanged filters to discover older records until a short/empty
+page. Paging is not a cross-call snapshot: concurrent inserts/updates/removals
+can move records, so reconcile IDs or restart discovery if the collection changes.
+A listing index supports the ordering and the `start_on` bound of date overlap;
+the `end_on` predicate is still checked on candidate rows. Large offsets still
+walk past earlier entries; this is not constant-time cursor pagination.
 
 The complete document has:
 
@@ -254,7 +264,10 @@ revision or repeat a stale whole-document replacement with a new key.
 `plan-save` and `plan-remove` share a persistent request-key namespace. Retry with
 the identical raw JSON field values (including omitted vs supplied defaults) and
 the same key. The original response is replayed before current-state checks;
-reuse with a changed payload fails `request_key_conflict`. A historical retry
+reuse with a changed payload fails `request_key_conflict`, except that unknown
+top-level fields are rejected earlier as `unknown_fields`. Payload comparison is
+type-sensitive (`true`, `1`, and `1.0` differ) but ignores JSON object key order.
+A historical retry
 cannot revert a newer revision or recreate a deleted plan, but its response can
 describe the old snapshot. Fetch by ID to establish current state, or list if the
 plan was removed. Deletion requires ID, current revision and a new request key.

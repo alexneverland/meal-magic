@@ -71,8 +71,7 @@ encrypted data. The single-user SQLite file uses normal OS file permissions.
 
 Repository: [alexneverland/meal-magic](https://github.com/alexneverland/meal-magic).
 
-Use `main` for the merged source (this 0.4.0 change is proposed in the
-`feat/meal-plans` branch until its PR is merged):
+Use `main` for the merged source:
 
 ```text
 git clone https://github.com/alexneverland/meal-magic.git
@@ -86,9 +85,8 @@ Choose `--agent claude-code` or `--agent antigravity` instead of `codex` as need
 For an unmerged change, select its PR branch explicitly instead. A source preview
 on `main` is not a tagged release or a claim of completed conversational testing.
 
-To inspect this unmerged 0.4.0 preview in a separate checkout, use
-`git clone --branch feat/meal-plans https://github.com/alexneverland/meal-magic.git`.
-Back up an existing data directory before using the preview: its first successful
+To inspect an unmerged change, clone its PR branch explicitly in a separate checkout.
+Back up an existing data directory before using this preview: its first successful
 storage request upgrades the database to schema 4.
 
 Alternatively, download a source ZIP using GitHub's **Code → Download ZIP** on
@@ -489,6 +487,11 @@ separately from actual meals. Saving or changing a plan does not record cooking,
 eating, buying groceries or consuming pantry stock. Recipe-library entries are
 not created just because a dish appears in a plan. There is no pantry inventory,
 per-person attendance tracking or reminder system in this change.
+
+The plan list supports paging through older plans with `limit`/`offset` and an
+optional date-overlap filter; there is no need to export the full personal profile
+to find records beyond the first 100. Paging is not a snapshot across concurrent
+edits, so a host should reconcile plan IDs if the collection changes while paging.
 
 ```text
 Forget that saved plan; keep my recipes and actual meal history.

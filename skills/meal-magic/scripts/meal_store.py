@@ -146,6 +146,8 @@ class Store:
                 con.execute("PRAGMA user_version = 4")
             elif version != 4:
                 raise StoreError("unsupported_schema_version")
+            # Also add this index to schema-4 previews created before pagination.
+            con.execute("CREATE INDEX IF NOT EXISTS plans_listing ON plans(start_on DESC,updated_at DESC,id)")
             return con
         except Exception:
             con.close()
@@ -174,7 +176,7 @@ class Store:
             "plan-save": (self._plan_save, {"id", "expected_revision", "request_key", "title",
                                             "meals", "shopping_list", "notes"}),
             "plan-get": (self._plan_get, {"id"}),
-            "plan-list": (self._plan_list, {"on", "limit"}),
+            "plan-list": (self._plan_list, {"on", "limit", "offset"}),
             "plan-remove": (self._plan_remove, {"id", "expected_revision", "request_key"}),
             "export": (self._export, set()),
         }
@@ -524,9 +526,13 @@ class Store:
 
     def _plan_list(self, con: sqlite3.Connection, req: dict) -> list[dict]:
         on = date_field(req, "on").isoformat() if "on" in req else None
+        offset = req.get("offset", 0)
+        if type(offset) is not int or not 0 <= offset < 2**63:
+            raise StoreError("invalid_offset")
+        where, params = ("WHERE start_on<=? AND end_on>=? ", [on, on]) if on is not None else ("", [])
         rows = con.execute("SELECT id,title,start_on,end_on,revision,created_at,updated_at FROM plans "
-                           "WHERE (? IS NULL OR (start_on<=? AND end_on>=?)) "
-                           "ORDER BY start_on DESC,updated_at DESC,id LIMIT ?", (on, on, on, limit_field(req)))
+                           + where + "ORDER BY start_on DESC,updated_at DESC,id LIMIT ? OFFSET ?",
+                           (*params, limit_field(req), offset))
         return [dict(row) for row in rows]
 
     @staticmethod
@@ -541,7 +547,9 @@ class Store:
         """Replay the original response before any current-state/revision checks."""
         previous = con.execute("SELECT * FROM plan_requests WHERE request_key=?", (key,)).fetchone()
         if previous:
-            if json.loads(previous["request_payload"]) != req:
+            stored = json.dumps(json.loads(previous["request_payload"]), sort_keys=True, allow_nan=False)
+            incoming = json.dumps(req, sort_keys=True, allow_nan=False)
+            if stored != incoming:
                 raise StoreError("request_key_conflict")
             return json.loads(previous["response"])
         return None

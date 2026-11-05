@@ -89,6 +89,89 @@ class PlanTests(unittest.TestCase):
             self.save(conflict)
         self.assertEqual(len(self.call("plan-list")), 1)
 
+    def test_changed_json_types_conflict_but_object_key_order_does_not(self):
+        create = self.plan_request()
+        create["meals"][0]["servings"] = 1
+        saved = self.save(create)
+        self.assertEqual(self.save(dict(reversed(list(create.items())))), saved)
+        for value in (True, 1.0):
+            changed = copy.deepcopy(create)
+            changed["meals"][0]["servings"] = value
+            with self.subTest(value=value), self.assertRaisesRegex(StoreError, "request_key_conflict"):
+                self.save(changed)
+        update = self.update(saved)
+        self.save(update)
+        for value in (True, 1.0):
+            changed = copy.deepcopy(update)
+            changed["expected_revision"] = value
+            with self.subTest(value=value), self.assertRaisesRegex(StoreError, "request_key_conflict"):
+                self.save(changed)
+        delete = {"action": "plan-remove", "id": saved["id"], "expected_revision": 2, "request_key": "typed-delete"}
+        self.store.handle(delete)
+        changed = {**delete, "expected_revision": 2.0}
+        with self.assertRaisesRegex(StoreError, "request_key_conflict"):
+            self.store.handle(changed)
+
+    def test_unknown_top_level_fields_take_precedence_over_receipt_checks(self):
+        create = self.plan_request()
+        saved = self.save(create)
+        with self.assertRaisesRegex(StoreError, "^unknown_fields$"):
+            self.save({**create, "unexpected": True})
+        delete = {"action": "plan-remove", "id": saved["id"], "expected_revision": 1, "request_key": "extra-delete"}
+        self.store.handle(delete)
+        with self.assertRaisesRegex(StoreError, "^unknown_fields$"):
+            self.store.handle({**delete, "unexpected": True})
+
+    def test_paging_can_discover_every_plan_beyond_one_hundred(self):
+        ids = set()
+        for index in range(105):
+            req = self.plan_request(key=f"page-{index}")
+            req["title"] = f"Synthetic page {index}"
+            ids.add(self.save(req)["id"])
+        first = self.call("plan-list", limit=100)
+        second = self.call("plan-list", limit=100, offset=100)
+        self.assertEqual(len(first), 100)
+        self.assertEqual(len(second), 5)
+        self.assertEqual({p["id"] for p in first + second}, ids)
+        self.assertFalse({p["id"] for p in first} & {p["id"] for p in second})
+        self.assertEqual(self.call("plan-list", offset=105), [])
+        filtered = self.call("plan-list", on="2026-11-10", limit=100, offset=100)
+        self.assertEqual(filtered, second)
+        self.assertNotIn("meals", second[0])
+
+    def test_invalid_offsets_are_rejected(self):
+        for offset in (-1, True, 1.0, "1", 2**63):
+            with self.subTest(offset=offset), self.assertRaisesRegex(StoreError, "invalid_offset"):
+                self.call("plan-list", offset=offset)
+
+    def test_plan_listing_uses_index_without_temporary_order_sort(self):
+        self.save()
+        queries = []
+        original_connect = self.store._connect
+        def traced_connect():
+            con = original_connect()
+            con.set_trace_callback(queries.append)
+            return con
+        with patch.object(self.store, "_connect", side_effect=traced_connect):
+            self.call("plan-list")
+            self.call("plan-list", on="2026-11-10")
+        listing_queries = [sql for sql in queries if sql.startswith("SELECT id,title,start_on")]
+        self.assertEqual(len(listing_queries), 2)
+        with closing(sqlite3.connect(self.store.path)) as con:
+            for query in listing_queries:
+                explain = " ".join(str(row[3]) for row in con.execute("EXPLAIN QUERY PLAN " + query))
+                self.assertIn("plans_listing", explain)
+                self.assertNotIn("USE TEMP B-TREE", explain)
+
+    def test_existing_schema_four_preview_gains_listing_index_without_data_loss(self):
+        saved = self.save()
+        with closing(sqlite3.connect(self.store.path)) as con:
+            con.execute("DROP INDEX IF EXISTS plans_listing")
+            con.commit()
+        self.assertEqual(self.call("plan-get", id=saved["id"]), saved)
+        with closing(sqlite3.connect(self.store.path)) as con:
+            self.assertTrue(con.execute("SELECT name FROM sqlite_master WHERE type='index' AND name='plans_listing'").fetchone())
+
     def test_stale_revision_and_missing_list_do_not_overwrite_plan(self):
         original = self.save()
         req = self.update(original)
