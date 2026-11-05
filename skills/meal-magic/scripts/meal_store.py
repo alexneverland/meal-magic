@@ -13,7 +13,7 @@ import uuid
 from datetime import date, datetime, timezone
 from typing import Any
 
-VERSION = "0.4.0"
+VERSION = "0.5.0"
 KINDS = ("prefer", "avoid", "forbid", "allergy", "diet")
 AGE_GROUPS = ("unspecified", "infant", "young_child", "child", "teen", "adult", "older_adult")
 ALLERGY_STATUSES = ("unknown", "none_reported", "reported")
@@ -144,7 +144,23 @@ class Store:
                 con.execute("CREATE TABLE plan_requests (request_key TEXT PRIMARY KEY, "
                             "request_payload TEXT NOT NULL, response TEXT NOT NULL)")
                 con.execute("PRAGMA user_version = 4")
-            elif version != 4:
+                version = 4
+            if version == 4:
+                con.execute("CREATE TABLE meal_members (meal_id TEXT NOT NULL REFERENCES meals(id) ON DELETE CASCADE, "
+                            "member_id TEXT NOT NULL REFERENCES members(id), PRIMARY KEY(meal_id,member_id))")
+                con.execute("CREATE INDEX meal_members_member ON meal_members(member_id,meal_id)")
+                con.execute("PRAGMA user_version = 5")
+                version = 5
+            if version == 5:
+                # No FK: an old log retry must not recreate a removed event or its links.
+                con.execute("CREATE TABLE meal_requests (request_key TEXT PRIMARY KEY, "
+                            "request_payload TEXT NOT NULL, response TEXT NOT NULL)")
+                rows = list(con.execute("SELECT * FROM meals ORDER BY id"))
+                for row, meal in zip(rows, self._meals(con, rows, all_members=True)):
+                    payload = {key: meal[key] for key in ("kind", "name", "occurred_on", "recipe_id", "member_ids")}
+                    self._record_meal_receipt(con, row["request_key"], payload, meal)
+                con.execute("PRAGMA user_version = 6")
+            elif version != 6:
                 raise StoreError("unsupported_schema_version")
             # Also add this index to schema-4 previews created before pagination.
             con.execute("CREATE INDEX IF NOT EXISTS plans_listing ON plans(start_on DESC,updated_at DESC,id)")
@@ -170,8 +186,8 @@ class Store:
             "recipe-search": (self._recipe_search, {"query", "favorites_only", "limit"}),
             "recipe-get": (self._recipe_get, {"id"}),
             "recipe-favorite": (self._recipe_favorite, {"id", "favorite"}),
-            "meal-log": (self._meal_log, {"kind", "name", "occurred_on", "recipe_id", "request_key"}),
-            "meal-list": (self._meal_list, {"limit", "kind"}),
+            "meal-log": (self._meal_log, {"kind", "name", "occurred_on", "recipe_id", "request_key", "member_ids"}),
+            "meal-list": (self._meal_list, {"limit", "kind", "member_id"}),
             "meal-remove": (self._remove_meal, {"id"}),
             "plan-save": (self._plan_save, {"id", "expected_revision", "request_key", "title",
                                             "meals", "shopping_list", "notes"}),
@@ -206,11 +222,43 @@ class Store:
         return result
 
     @staticmethod
-    def _meal(row: sqlite3.Row) -> dict:
+    def _meal(row: sqlite3.Row, member_ids: list[str]) -> dict:
         result = dict(row)
         result.pop("request_key", None)
         result.pop("request_payload", None)
+        result["member_ids"] = member_ids
         return result
+
+    def _meals(self, con: sqlite3.Connection, rows: list[sqlite3.Row], *, all_members: bool = False) -> list[dict]:
+        if not rows:
+            return []
+        members = {row["id"]: [] for row in rows}
+        if all_members:
+            links = con.execute("SELECT meal_id,member_id FROM meal_members ORDER BY meal_id,member_id")
+        else:
+            # Bounded callers return at most 100 meals; NULL padding never matches an ID.
+            ids = list(members)
+            links = con.execute(
+                "SELECT meal_id,member_id FROM meal_members WHERE meal_id IN ("
+                "?,?,?,?,?,?,?,?,?,?,"
+                "?,?,?,?,?,?,?,?,?,?,"
+                "?,?,?,?,?,?,?,?,?,?,"
+                "?,?,?,?,?,?,?,?,?,?,"
+                "?,?,?,?,?,?,?,?,?,?,"
+                "?,?,?,?,?,?,?,?,?,?,"
+                "?,?,?,?,?,?,?,?,?,?,"
+                "?,?,?,?,?,?,?,?,?,?,"
+                "?,?,?,?,?,?,?,?,?,?,"
+                "?,?,?,?,?,?,?,?,?,?) ORDER BY meal_id,member_id", ids + [None] * (100 - len(ids)))
+        for link in links:
+            members[link["meal_id"]].append(link["member_id"])
+        return [self._meal(row, members[row["id"]]) for row in rows]
+
+    @staticmethod
+    def _record_meal_receipt(con: sqlite3.Connection, key: str, payload: dict, response: dict) -> dict:
+        con.execute("INSERT INTO meal_requests VALUES (?,?,?)",
+                    (key, json.dumps(payload, ensure_ascii=False), json.dumps(response, ensure_ascii=False)))
+        return response
 
     def _context(self, con: sqlite3.Connection, req: dict) -> dict:
         result = {
@@ -353,6 +401,8 @@ class Store:
             raise StoreError("member_has_preferences_remove_or_reassign_explicitly")
         if con.execute("SELECT id FROM observances WHERE member_id=?", (ident,)).fetchone():
             raise StoreError("member_has_observances_remove_or_reassign_explicitly")
+        if con.execute("SELECT meal_id FROM meal_members WHERE member_id=?", (ident,)).fetchone():
+            raise StoreError("member_has_meals_remove_events_explicitly")
         return self._remove(con, "members", req)
 
     @staticmethod
@@ -489,27 +539,53 @@ class Store:
             raise StoreError("invalid_meal_kind")
         occurred_on = date_field(req, "occurred_on").isoformat()
         recipe_id = req.get("recipe_id")
-        if recipe_id is not None:
-            if not isinstance(recipe_id, str) or not con.execute("SELECT id FROM recipes WHERE id=?", (recipe_id,)).fetchone():
-                raise StoreError("recipe_not_found")
-        payload = {"kind": kind, "name": text_field(req, "name"), "occurred_on": occurred_on, "recipe_id": recipe_id}
-        previous = self._replayed(con, "meals", key, payload)
+        if recipe_id is not None and not isinstance(recipe_id, str):
+            raise StoreError("recipe_not_found")
+        member_ids = req.get("member_ids", [])
+        if not isinstance(member_ids, list) or len(member_ids) > 100 or any(
+            not isinstance(member, str) or not member.strip() or len(member) > 200 for member in member_ids
+        ):
+            raise StoreError("invalid_member_ids")
+        member_ids = sorted(member.strip() for member in member_ids)
+        if len(set(member_ids)) != len(member_ids):
+            raise StoreError("invalid_member_ids")
+        payload = {"kind": kind, "name": text_field(req, "name"), "occurred_on": occurred_on,
+                   "recipe_id": recipe_id, "member_ids": member_ids}
+        previous = self._replayed(con, "meal_requests", key, payload)
         if previous:
-            return self._meal(previous)
+            return json.loads(previous["response"])
+        if recipe_id is not None and not con.execute("SELECT id FROM recipes WHERE id=?", (recipe_id,)).fetchone():
+            raise StoreError("recipe_not_found")
+        for member in member_ids:
+            if not con.execute("SELECT id FROM members WHERE id=?", (member,)).fetchone():
+                raise StoreError("member_not_found")
         ident = uuid.uuid4().hex
         con.execute("INSERT INTO meals VALUES (?,?,?,?,?,?,?,?)",
                     (ident, kind, payload["name"], occurred_on, recipe_id, now(), key,
                      json.dumps(payload, ensure_ascii=False)))
-        return self._meal(con.execute("SELECT * FROM meals WHERE id=?", (ident,)).fetchone())
+        con.executemany("INSERT INTO meal_members(meal_id,member_id) VALUES (?,?)",
+                        [(ident, member) for member in member_ids])
+        meal = self._meals(con, [con.execute("SELECT * FROM meals WHERE id=?", (ident,)).fetchone()])[0]
+        return self._record_meal_receipt(con, key, payload, meal)
 
     def _meal_list(self, con: sqlite3.Connection, req: dict) -> list[dict]:
         limit = limit_field(req)
         kind = req.get("kind")
         if kind is not None and kind not in ("cooked", "eaten"):
             raise StoreError("invalid_meal_kind")
-        return [self._meal(r) for r in con.execute(
-            "SELECT * FROM meals WHERE (? IS NULL OR kind=?) ORDER BY occurred_on DESC, created_at DESC, id LIMIT ?",
-            (kind, kind, limit))]
+        if "member_id" in req:
+            member = text_field(req, "member_id", limit=200)
+            if not con.execute("SELECT id FROM members WHERE id=?", (member,)).fetchone():
+                raise StoreError("member_not_found")
+            rows = con.execute(
+                "SELECT m.* FROM meal_members mm JOIN meals m ON m.id=mm.meal_id "
+                "WHERE mm.member_id=? AND (? IS NULL OR m.kind=?) "
+                "ORDER BY m.occurred_on DESC,m.created_at DESC,m.id LIMIT ?", (member, kind, kind, limit))
+        else:
+            rows = con.execute(
+                "SELECT * FROM meals WHERE (? IS NULL OR kind=?) ORDER BY occurred_on DESC,created_at DESC,id LIMIT ?",
+                (kind, kind, limit))
+        return self._meals(con, list(rows))
 
     @staticmethod
     def _plan(row: sqlite3.Row) -> dict:
@@ -644,11 +720,11 @@ class Store:
         return self._record_plan_receipt(con, key, req, result)
 
     def _export(self, con: sqlite3.Connection, req: dict) -> dict:
-        return {"schema_version": 4, "household": self._household(con),
+        return {"schema_version": 6, "household": self._household(con),
                 "plans": [self._plan(row) for row in con.execute("SELECT * FROM plans ORDER BY id")],
                 "preferences": [dict(r) for r in con.execute("SELECT * FROM preferences ORDER BY id")],
                 "recipes": [self._recipe(r) for r in con.execute("SELECT * FROM recipes ORDER BY id")],
-                "meals": [self._meal(r) for r in con.execute("SELECT * FROM meals ORDER BY id")]}
+                "meals": self._meals(con, list(con.execute("SELECT * FROM meals ORDER BY id")), all_members=True)}
 
 
 def main() -> int:

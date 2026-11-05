@@ -26,6 +26,7 @@ class PackageTests(unittest.TestCase):
                 self.assertIsNone(bundle.testzip())
                 bundle.extractall(base / "extracted")  # Entries above are the exact trusted allowlist.
             extracted = base / f"extracted/meal-magic-{version}"
+            self.assertTrue((extracted / "tests/test_meal_members.py").is_file())
             installed = base / "custom-agent/meal-magic"
             p = subprocess.run([sys.executable, str(extracted / "tools/manage_skill.py"), "install",
                                 "--agent", "custom", "--destination", str(installed)],
@@ -57,6 +58,14 @@ class PackageTests(unittest.TestCase):
             self.assertEqual(update.returncode, 0, update.stdout + update.stderr)
             self.assertEqual(invoke({"action": "plan-get", "id": saved["id"]}), saved)
             self.assertEqual(invoke({"action": "meal-list"}), [])
+            member = invoke({"action": "member-set", "label": "Synthetic diner"})
+            meal = invoke({"action": "meal-log", "request_key": "package-meal", "name": "Synthetic rice",
+                           "kind": "eaten", "occurred_on": "2026-11-05", "member_ids": [member["id"]]})
+            update = subprocess.run([sys.executable, str(extracted / "tools/manage_skill.py"), "update",
+                                     "--agent", "custom", "--destination", str(installed)],
+                                    encoding="utf-8", capture_output=True)
+            self.assertEqual(update.returncode, 0, update.stdout + update.stderr)
+            self.assertEqual(invoke({"action": "meal-list", "member_id": member["id"]}), [meal])
 
 
 if __name__ == "__main__":

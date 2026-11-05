@@ -163,7 +163,7 @@ class PlanTests(unittest.TestCase):
                 self.assertIn("plans_listing", explain)
                 self.assertNotIn("USE TEMP B-TREE", explain)
 
-    def test_existing_schema_four_preview_gains_listing_index_without_data_loss(self):
+    def test_existing_store_gains_missing_listing_index_without_data_loss(self):
         saved = self.save()
         with closing(sqlite3.connect(self.store.path)) as con:
             con.execute("DROP INDEX IF EXISTS plans_listing")
@@ -305,7 +305,7 @@ class PlanTests(unittest.TestCase):
     def test_schema_three_upgrade_preserves_every_existing_domain(self):
         self.seed_schema_three()
         exported = self.call("export")
-        self.assertEqual(exported["schema_version"], 4)
+        self.assertEqual(exported["schema_version"], 6)
         self.assertEqual(exported["plans"], [])
         self.assertEqual(exported["preferences"][0]["member_id"], "member-old")
         self.assertEqual(exported["recipes"][0]["content"], "Exact old content")

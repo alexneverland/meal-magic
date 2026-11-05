@@ -1,14 +1,30 @@
 # Verification — 2026-11-05
 
-Version: **0.4.0**, source preview proposed through pull requests. Work was
+Version: **0.5.0**, source preview proposed through pull requests. Work was
 performed without subagents. No tagged release or agent-directory installation
 is implied by the source repository. Review/merge state is recorded in the
 corresponding pull request, not inferred from this report.
 
 ## Executed
 
-- Windows, Python **3.14.10**: **81/81 unittest tests passed** for the planning change and review fixes.
-- Windows, Python **3.12.10**: **81/81 unittest tests passed** for the planning change and review fixes.
+- Windows, Python **3.14.10**: **100/100 unittest tests passed** for the member-history update and review fixes.
+- Windows, Python **3.12.10**: **100/100 unittest tests passed** for the member-history update and review fixes.
+- Nineteen new synthetic membership tests cover separate dishes, independent
+  cooked/eaten membership, unspecified attendance, per-member filtering before
+  limits, reordered/conflicting retries, malformed/unknown IDs, the 100-member
+  boundary, subprocess restarts and concurrent retries, linked-member deletion
+  refusal, event-link removal, and atomic rollback on a failed relation write.
+  Schema-4 migration preserves recipes, restrictions, members, locale, observances,
+  onboarding, plans and their mutation receipts. Old meal request keys remain
+  retryable without rewriting historical payloads or inventing participants.
+  Failed writes and a denied migration index creation roll back to schema 4.
+  Review regressions verify that deleted events never return on old retries,
+  including after member removal; schema-5 previews backfill durable receipts;
+  denied backfill/receipt writes roll back; a 120-event export loads membership in
+  one query rather than one per event. Final schema version is 6. Receipts retain
+  original meal text/member IDs after active removal and are excluded from export.
+- Prior v0.4 planning/review baseline: **81/81 tests passed** on Windows with
+  Python 3.12.10 and 3.14.10. The current suite includes those tests.
 - Prior v0.3 Windows, Python **3.11.9**: **11/11 installer tests passed**, including actual
   junction target/ancestor/content and project-alias regressions. The new regressions
   first reproduced failures against the previous implementation on Python 3.11.
@@ -67,9 +83,15 @@ corresponding pull request, not inferred from this report.
   skill includes its MIT license. No caches or databases were packaged.
   The planning update also saves a plan through the extracted installed helper,
   updates that installation and retrieves the unchanged plan from external data.
+  The member-history update includes the new test module in the ZIP, records a
+  member-scoped eaten event through the extracted installed helper, updates that
+  temporary installation, and retrieves the same event by member after restart.
 - Repository validation checks required public files, local Markdown links, runtime
   imports against the standard library, and forbidden tracked paths in Git checkouts.
   It is a hygiene check, not an exhaustive security or secret-content audit.
+- The 0.5.0 source ZIP was built and inspected against the exact 27-file public
+  allowlist, with passing CRC verification and a matching SHA-256 sidecar. Generated
+  archives and caches are not committed. `git diff --check` passed.
 - GitHub CI is configured for Windows/Linux/macOS with Python 3.10/3.14 and a stable
   `Required checks` gate. CI results belong to the specific commit/PR check runs;
   configuration alone does not establish a pass on those platforms.
@@ -107,6 +129,11 @@ model follows the instructions. [Agent scenarios](tests/agent-scenarios.md) spec
 the live checks still needed before claiming tested conversational compatibility.
 No live-agent sessions were launched for the planning update. New conversational
 plan/shopping-list scenarios are provided for the owner, not recorded as passed.
+No live-agent sessions were launched for the member-history update either.
+Audience continuity, separate dishes, temporary ingredients and correct assignment
+from actual conversational reports have additional manual acceptance scenarios;
+their presence is not evidence that a host model passed them. There is no pantry
+storage, quantity/expiry tracking, medical inference or automatic meal attendance.
 
 The local baseline above used Windows/Python 3.12 and 3.14. Other local Python
 versions and macOS/Linux were not executed locally. The code targets Python
