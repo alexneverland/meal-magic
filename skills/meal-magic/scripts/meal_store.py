@@ -236,10 +236,20 @@ class Store:
         if all_members:
             links = con.execute("SELECT meal_id,member_id FROM meal_members ORDER BY meal_id,member_id")
         else:
-            # Only generated placeholders vary; every caller-supplied ID is bound.
-            placeholders = ",".join("?" for _ in rows)
-            links = con.execute("SELECT meal_id,member_id FROM meal_members WHERE meal_id IN (" +
-                                placeholders + ") ORDER BY meal_id,member_id", list(members))
+            # Bounded callers return at most 100 meals; NULL padding never matches an ID.
+            ids = list(members)
+            links = con.execute(
+                "SELECT meal_id,member_id FROM meal_members WHERE meal_id IN ("
+                "?,?,?,?,?,?,?,?,?,?,"
+                "?,?,?,?,?,?,?,?,?,?,"
+                "?,?,?,?,?,?,?,?,?,?,"
+                "?,?,?,?,?,?,?,?,?,?,"
+                "?,?,?,?,?,?,?,?,?,?,"
+                "?,?,?,?,?,?,?,?,?,?,"
+                "?,?,?,?,?,?,?,?,?,?,"
+                "?,?,?,?,?,?,?,?,?,?,"
+                "?,?,?,?,?,?,?,?,?,?,"
+                "?,?,?,?,?,?,?,?,?,?) ORDER BY meal_id,member_id", ids + [None] * (100 - len(ids)))
         for link in links:
             members[link["meal_id"]].append(link["member_id"])
         return [self._meal(row, members[row["id"]]) for row in rows]

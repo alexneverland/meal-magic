@@ -140,6 +140,9 @@ class MealMemberTests(unittest.TestCase):
             result = self.call("export")
         self.assertEqual(len(result["meals"]), 120)
         self.assertEqual(sum(meal["member_ids"] == [self.one["id"]] for meal in result["meals"]), 60)
+        listed = self.call("meal-list", limit=100)
+        self.assertEqual(len(listed), 100)
+        self.assertEqual(sum(meal["member_ids"] == [self.one["id"]] for meal in listed), 50)
         membership_reads = [sql for sql in statements if sql.lstrip().upper().startswith("SELECT")
                             and "meal_members" in sql]
         self.assertEqual(len(membership_reads), 1)
