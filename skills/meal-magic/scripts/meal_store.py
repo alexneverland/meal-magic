@@ -13,7 +13,7 @@ import uuid
 from datetime import date, datetime, timezone
 from typing import Any
 
-VERSION = "0.3.0"
+VERSION = "0.4.0"
 KINDS = ("prefer", "avoid", "forbid", "allergy", "diet")
 AGE_GROUPS = ("unspecified", "infant", "young_child", "child", "teen", "adult", "older_adult")
 ALLERGY_STATUSES = ("unknown", "none_reported", "reported")
@@ -135,8 +135,19 @@ class Store:
                             "calendar TEXT NOT NULL, strictness TEXT NOT NULL, active INTEGER NOT NULL, "
                             "member_id TEXT REFERENCES members(id), notes TEXT NOT NULL, updated_at TEXT NOT NULL)")
                 con.execute("PRAGMA user_version = 3")
-            elif version != 3:
+                version = 3
+            if version == 3:
+                con.execute("CREATE TABLE plans (id TEXT PRIMARY KEY, title TEXT NOT NULL, "
+                            "start_on TEXT NOT NULL, end_on TEXT NOT NULL, document TEXT NOT NULL, "
+                            "revision INTEGER NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL)")
+                # Receipts intentionally have no FK: retries after removal must not recreate a plan.
+                con.execute("CREATE TABLE plan_requests (request_key TEXT PRIMARY KEY, "
+                            "request_payload TEXT NOT NULL, response TEXT NOT NULL)")
+                con.execute("PRAGMA user_version = 4")
+            elif version != 4:
                 raise StoreError("unsupported_schema_version")
+            # Also add this index to schema-4 previews created before pagination.
+            con.execute("CREATE INDEX IF NOT EXISTS plans_listing ON plans(start_on DESC,updated_at DESC,id)")
             return con
         except Exception:
             con.close()
@@ -162,6 +173,11 @@ class Store:
             "meal-log": (self._meal_log, {"kind", "name", "occurred_on", "recipe_id", "request_key"}),
             "meal-list": (self._meal_list, {"limit", "kind"}),
             "meal-remove": (self._remove_meal, {"id"}),
+            "plan-save": (self._plan_save, {"id", "expected_revision", "request_key", "title",
+                                            "meals", "shopping_list", "notes"}),
+            "plan-get": (self._plan_get, {"id"}),
+            "plan-list": (self._plan_list, {"on", "limit", "offset"}),
+            "plan-remove": (self._plan_remove, {"id", "expected_revision", "request_key"}),
             "export": (self._export, set()),
         }
         if not isinstance(req, dict) or not isinstance(req.get("action"), str):
@@ -495,8 +511,141 @@ class Store:
             "SELECT * FROM meals WHERE (? IS NULL OR kind=?) ORDER BY occurred_on DESC, created_at DESC, id LIMIT ?",
             (kind, kind, limit))]
 
+    @staticmethod
+    def _plan(row: sqlite3.Row) -> dict:
+        """Return a stored snapshot, never an actual meal event."""
+        result = dict(row)
+        result.update(json.loads(result.pop("document")))
+        return result
+
+    def _plan_get(self, con: sqlite3.Connection, req: dict) -> dict:
+        row = con.execute("SELECT * FROM plans WHERE id=?", (text_field(req, "id", limit=200),)).fetchone()
+        if not row:
+            raise StoreError("plan_not_found")
+        return self._plan(row)
+
+    def _plan_list(self, con: sqlite3.Connection, req: dict) -> list[dict]:
+        on = date_field(req, "on").isoformat() if "on" in req else None
+        offset = req.get("offset", 0)
+        if type(offset) is not int or not 0 <= offset < 2**63:
+            raise StoreError("invalid_offset")
+        limit = limit_field(req)
+        if on is None:
+            rows = con.execute("SELECT id,title,start_on,end_on,revision,created_at,updated_at FROM plans "
+                               "ORDER BY start_on DESC,updated_at DESC,id LIMIT ? OFFSET ?", (limit, offset))
+        else:
+            rows = con.execute("SELECT id,title,start_on,end_on,revision,created_at,updated_at FROM plans "
+                               "WHERE start_on<=? AND end_on>=? "
+                               "ORDER BY start_on DESC,updated_at DESC,id LIMIT ? OFFSET ?", (on, on, limit, offset))
+        return [dict(row) for row in rows]
+
+    @staticmethod
+    def _plan_revision(req: dict) -> int:
+        revision = req.get("expected_revision")
+        if type(revision) is not int or revision < 1:
+            raise StoreError("invalid_expected_revision")
+        return revision
+
+    @staticmethod
+    def _plan_receipt(con: sqlite3.Connection, key: str, req: dict) -> dict | None:
+        """Replay the original response before any current-state/revision checks."""
+        previous = con.execute("SELECT * FROM plan_requests WHERE request_key=?", (key,)).fetchone()
+        if previous:
+            stored = json.dumps(json.loads(previous["request_payload"]), sort_keys=True, allow_nan=False)
+            incoming = json.dumps(req, sort_keys=True, allow_nan=False)
+            if stored != incoming:
+                raise StoreError("request_key_conflict")
+            return json.loads(previous["response"])
+        return None
+
+    @staticmethod
+    def _record_plan_receipt(con: sqlite3.Connection, key: str, req: dict, response: dict) -> dict:
+        con.execute("INSERT INTO plan_requests VALUES (?,?,?)",
+                    (key, json.dumps(req, ensure_ascii=False), json.dumps(response, ensure_ascii=False)))
+        return response
+
+    @staticmethod
+    def _plan_document(req: dict) -> dict:
+        """Validate structure only; the host computes ingredients and shopping totals."""
+        meals = req.get("meals")
+        shopping = req.get("shopping_list")
+        if not isinstance(meals, list) or not 1 <= len(meals) <= 93:
+            raise StoreError("invalid_plan_meals")
+        if not isinstance(shopping, list) or len(shopping) > 300:
+            raise StoreError("invalid_shopping_list")
+        result = {"meals": [], "shopping_list": []}
+        slots = set()
+        for meal in meals:
+            if not isinstance(meal, dict) or set(meal) - {"on", "slot", "name", "servings", "details"}:
+                raise StoreError("invalid_plan_meal_fields")
+            on = date_field(meal, "on").isoformat()
+            slot = text_field(meal, "slot", limit=100)
+            if (on, slot.casefold()) in slots:
+                raise StoreError("duplicate_plan_slot")
+            slots.add((on, slot.casefold()))
+            servings = meal.get("servings")
+            if type(servings) is not int or not 1 <= servings <= 100:
+                raise StoreError("invalid_servings")
+            details = text_field(meal, "details", limit=12000)
+            result["meals"].append({"on": on, "slot": slot, "name": text_field(meal, "name"),
+                                    "servings": servings, "details": details})
+        dates = [date.fromisoformat(meal["on"]) for meal in result["meals"]]
+        if (max(dates) - min(dates)).days > 30:
+            raise StoreError("plan_span_exceeds_31_days")
+        for item in shopping:
+            if not isinstance(item, dict) or set(item) - {"item", "quantity", "notes"}:
+                raise StoreError("invalid_shopping_item_fields")
+            notes = item.get("notes", "")
+            if not isinstance(notes, str) or len(notes) > 2000:
+                raise StoreError("invalid_shopping_notes")
+            result["shopping_list"].append({"item": text_field(item, "item"),
+                                             "quantity": text_field(item, "quantity", limit=1000),
+                                             "notes": notes})
+        notes = req.get("notes", "")
+        if not isinstance(notes, str) or len(notes) > 8000:
+            raise StoreError("invalid_plan_notes")
+        result["notes"] = notes
+        return result
+
+    def _plan_save(self, con: sqlite3.Connection, req: dict) -> dict:
+        key = text_field(req, "request_key", limit=200)
+        replay = self._plan_receipt(con, key, req)
+        if replay is not None:
+            return replay
+        title = text_field(req, "title")
+        current = self._plan_get(con, req) if "id" in req else None
+        if current and self._plan_revision(req) != current["revision"]:
+            raise StoreError("plan_revision_conflict")
+        document = self._plan_document({**req, "notes": req.get("notes", current["notes"] if current else "")})
+        dates = [meal["on"] for meal in document["meals"]]
+        stamp = now()
+        if current:
+            ident = current["id"]
+            con.execute("UPDATE plans SET title=?,start_on=?,end_on=?,document=?,revision=revision+1,"
+                        "updated_at=? WHERE id=?", (title, min(dates), max(dates),
+                        json.dumps(document, ensure_ascii=False), stamp, ident))
+        else:
+            if "expected_revision" in req:
+                raise StoreError("revision_requires_plan_id")
+            ident = uuid.uuid4().hex
+            con.execute("INSERT INTO plans VALUES (?,?,?,?,?,1,?,?)", (ident, title, min(dates), max(dates),
+                        json.dumps(document, ensure_ascii=False), stamp, stamp))
+        return self._record_plan_receipt(con, key, req, self._plan_get(con, {"id": ident}))
+
+    def _plan_remove(self, con: sqlite3.Connection, req: dict) -> dict:
+        key = text_field(req, "request_key", limit=200)
+        replay = self._plan_receipt(con, key, req)
+        if replay is not None:
+            return replay
+        current = self._plan_get(con, req)
+        if self._plan_revision(req) != current["revision"]:
+            raise StoreError("plan_revision_conflict")
+        result = self._remove(con, "plans", req)
+        return self._record_plan_receipt(con, key, req, result)
+
     def _export(self, con: sqlite3.Connection, req: dict) -> dict:
-        return {"schema_version": 3, "household": self._household(con),
+        return {"schema_version": 4, "household": self._household(con),
+                "plans": [self._plan(row) for row in con.execute("SELECT * FROM plans ORDER BY id")],
                 "preferences": [dict(r) for r in con.execute("SELECT * FROM preferences ORDER BY id")],
                 "recipes": [self._recipe(r) for r in con.execute("SELECT * FROM recipes ORDER BY id")],
                 "meals": [self._meal(r) for r in con.execute("SELECT * FROM meals ORDER BY id")]}

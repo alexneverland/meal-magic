@@ -5,7 +5,7 @@ remember food preferences and restrictions, keep an actual meal history, and
 save recipes and favorites. One shared Python core works with Codex, Claude Code,
 Antigravity, and custom agents that can load instructions and execute local tools.
 
-**Version 0.3.0 — source preview, no tagged release yet.** Agent installation layouts
+**Version 0.4.0 — source preview, no tagged release yet.** Agent installation layouts
 are documented; live model-session compatibility is not yet certified. See
 [VERIFICATION.md](VERIFICATION.md) for exactly what was tested.
 
@@ -40,8 +40,11 @@ See [the acceptance scenarios](tests/agent-scenarios.md) and
 - Meals actually **cooked** and meals actually **eaten**, as separate events.
 - Complete saved recipes, including multiple versions with the same name, and
   favorites identified by stable IDs.
+- Saved multi-day meal plans and their consolidated shopping lists, kept together
+  with revision checks and separately from actual meal history.
 
-Suggestions and future plans are conversation content, not actual meal history.
+Suggestions remain conversation content; plans can be saved when requested.
+Neither suggestions nor saved plans are actual meal history.
 Saving, viewing, or favoriting a recipe never records it as cooked or eaten.
 Recent actual meals help the model offer variety while allowing requested repeats
 and leftovers. History is not automatically deleted.
@@ -68,7 +71,7 @@ encrypted data. The single-user SQLite file uses normal OS file permissions.
 
 Repository: [alexneverland/meal-magic](https://github.com/alexneverland/meal-magic).
 
-Use `main` for the reviewed source:
+Use `main` for the merged source:
 
 ```text
 git clone https://github.com/alexneverland/meal-magic.git
@@ -81,6 +84,10 @@ python tools/manage_skill.py install --agent codex
 Choose `--agent claude-code` or `--agent antigravity` instead of `codex` as needed.
 For an unmerged change, select its PR branch explicitly instead. A source preview
 on `main` is not a tagged release or a claim of completed conversational testing.
+
+To inspect an unmerged change, clone its PR branch explicitly in a separate checkout.
+Back up an existing data directory before using this preview: its first successful
+storage request upgrades the database to schema 4.
 
 Alternatively, download a source ZIP using GitHub's **Code → Download ZIP** on
 the chosen branch, extract it, and open a terminal beside this README and `tools/`.
@@ -101,7 +108,7 @@ To build a local review archive (without publishing anything):
 python tools/build_package.py
 ```
 
-This writes `dist/meal-magic-0.3.0.zip` and a SHA-256 sidecar. Packaging uses an
+This writes `dist/meal-magic-0.4.0.zip` and a SHA-256 sidecar. Packaging uses an
 explicit source-file allowlist, so databases, caches, personal settings, and
 untracked files cannot enter the archive through directory scanning.
 
@@ -293,17 +300,18 @@ overwrite option. Prefer running the helper as a CLI. On Windows, reparse points
 are checked without following them on every supported Python version, including
 3.10/3.11; project paths retain their original spelling until this check runs.
 
-The manager never opens the personal database. v0.3 uses schema version 3. On the
-first successful storage request, the helper upgrades schema 1 or 2 transactionally.
+The manager never opens the personal database. v0.4 uses schema version 4. On the
+first successful storage request, the helper upgrades schema 1, 2 or 3 transactionally.
 Schema 1 gains household members, onboarding state and nullable preference
-ownership; schema 2 gains locale and declared observances. Existing IDs/content,
+ownership; schema 2 gains locale and declared observances; schema 3 gains empty
+plan storage and retry receipts. Existing IDs/content,
 favorites, history, members and ownership remain intact. Old unassigned
 preferences stay unassigned. No family, age, location, belief or practice is
 invented. A completed/skipped schema-2 introduction stays completed/skipped.
 
 Back up the data directory before upgrading. The schema change rolls back if it
 fails. Unknown schema versions/foreign databases are refused, never reset. Once
-schema 3 is committed, v0.1/v0.2 cannot read it: to roll back, stop all clients
+schema 4 is committed, v0.1/v0.2/v0.3 cannot read it: to roll back, stop all clients
 and restore the matching pre-upgrade data backup, preserving newer data separately.
 
 ## First-use introduction and family meals
@@ -446,6 +454,58 @@ your OS file manager if you intend to erase it. There is no automatic data purge
 
 ## Usage examples
 
+### Weekly plans and shopping lists
+
+```text
+Make a five-day dinner plan for four people, budget-conscious and varied.
+We have 500 g dry rice and olive oil. Show quantities and a combined shopping list.
+Save the plan so we can change it later.
+```
+
+The agent uses the current household restrictions/history and relevant dates,
+asks about missing dates/diners when needed, and plans quantities for the stated
+servings. The consolidated shopping list distinguishes dry/cooked/drained amounts
+and subtracts only the stock you supplied. "Budget-conscious" is an estimate unless
+prices are actually verified; the skill has no store pricing or ordering service.
+
+```text
+Show my saved five-day plan and its shopping list.
+Replace Wednesday's dinner with lentils for two; keep the other days and save
+the updated plan and revised shopping list.
+```
+
+Programs and lists are saved as one snapshot, with a stable plan ID and increasing
+revision. Updating requires the current revision, so another agent's changes
+cannot be silently overwritten. An outdated update is refused and must be
+reapplied to the latest plan. The host recalculates the quantities/list; Python
+validates and stores the supplied snapshot rather than understanding ingredients
+or guaranteeing totals. An empty shopping list is possible if nothing else is needed.
+
+Plan storage accepts 1–93 meals within 31 days; each meal has a date, slot, name,
+integer servings and ingredient/preparation details. Plans are listed/retrieved
+separately from actual meals. Saving or changing a plan does not record cooking,
+eating, buying groceries or consuming pantry stock. Recipe-library entries are
+not created just because a dish appears in a plan. There is no pantry inventory,
+per-person attendance tracking or reminder system in this change.
+
+The plan list supports paging through older plans with `limit`/`offset` and an
+optional date-overlap filter; there is no need to export the full personal profile
+to find records beyond the first 100. Paging is not a snapshot across concurrent
+edits, so a host should reconcile plan IDs if the collection changes while paging.
+
+```text
+Forget that saved plan; keep my recipes and actual meal history.
+```
+
+Deletion removes the active plan with a revision check. Historical mutation receipts
+remain in the local database to make retries safe; this is not complete erasure
+of all old plan text. Export includes current plans but not those receipts. To
+erase the entire profile, follow the separate data-directory deletion procedure.
+No JSON import or plan-version restore is added. Plan contents are historical:
+the agent must recheck current restrictions before recommending a saved plan.
+
+### Recipes and actual meals
+
 These are synthetic prompts, not bundled user preferences:
 
 ```text
@@ -517,8 +577,8 @@ models, use Android devices, or read application/user databases. See
 Storage tests cannot prove that every host/model correctly interprets ambiguous
 conversation or reliably activates the skill. Allergen/dietary reasoning depends
 on that model and the user's information; the helper is not a dietary safety
-classifier. v0.3 excludes shopping integrations, inventory tracking, nutrition
-tracking, meal-plan persistence, source scraping, and MCP services.
+classifier. v0.4 excludes shopping service integrations, inventory tracking, nutrition
+tracking, per-member actual-meal attendance, JSON import, source scraping, and MCP services.
 
 ## Layout
 

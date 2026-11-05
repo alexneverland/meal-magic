@@ -1,15 +1,15 @@
 # Verification — 2026-11-05
 
-Version: **0.3.0**, source preview reviewed through pull requests. Work was
+Version: **0.4.0**, source preview proposed through pull requests. Work was
 performed without subagents. No tagged release or agent-directory installation
 is implied by the source repository. Review/merge state is recorded in the
 corresponding pull request, not inferred from this report.
 
 ## Executed
 
-- Windows, Python **3.14.10**: **60/60 unittest tests passed**.
-- Windows, Python **3.12.10**: **60/60 unittest tests passed**.
-- Windows, Python **3.11.9**: **11/11 installer tests passed**, including actual
+- Windows, Python **3.14.10**: **81/81 unittest tests passed** for the planning change and review fixes.
+- Windows, Python **3.12.10**: **81/81 unittest tests passed** for the planning change and review fixes.
+- Prior v0.3 Windows, Python **3.11.9**: **11/11 installer tests passed**, including actual
   junction target/ancestor/content and project-alias regressions. The new regressions
   first reproduced failures against the previous implementation on Python 3.11.
   The fix uses `lstat`/Windows reparse attributes, not Python-3.12-only APIs.
@@ -25,6 +25,18 @@ corresponding pull request, not inferred from this report.
   failures, and concurrent writes from eight processes.
   Preference qualifications survive omitted notes on exact repeats and ownership
   updates; clearing requires an explicit empty string, and invalid null rolls back.
+- Twenty-one plan tests verify separate plan storage, exact process-restart retrieval,
+  per-day replacement with a full revised shopping list, revision conflicts,
+  simultaneous writers, historical receipt replay after updates/deletion, explicit
+  removal, malformed nested payloads, notes preservation, date overlap listing,
+  migration from schema 3 preserving existing domains, and transactional rollback
+  on receipt failure or a failed write during migration. Quantities are text and
+  were not interpreted/summed by Python; ingredient totals remain host-model work.
+  Review regressions check JSON-type-sensitive retries (including booleans vs
+  integers/floats), unknown-field error precedence, complete paging over 105 plans,
+  invalid offsets, and the actual traced listing queries' indexed execution without
+  temporary ordering sorts. Existing schema-4 previews gain the listing index
+  without changing plan data.
 - Household tests verified persistent members/stages, independent per-member
   preferences, partial member updates, nonrepeating onboarding state storage,
   skipping/restarting without data loss, explicit unknown-vs-none-reported allergy
@@ -53,6 +65,8 @@ corresponding pull request, not inferred from this report.
   exact entries and CRCs, extracted it, installed from the extracted manager, and
   ran that installed helper against an empty synthetic profile. The installed
   skill includes its MIT license. No caches or databases were packaged.
+  The planning update also saves a plan through the extracted installed helper,
+  updates that installation and retrieves the unchanged plan from external data.
 - Repository validation checks required public files, local Markdown links, runtime
   imports against the standard library, and forbidden tracked paths in Git checkouts.
   It is a hygiene check, not an exhaustive security or secret-content audit.
@@ -65,7 +79,7 @@ corresponding pull request, not inferred from this report.
 
 ### Agreed conversational test scope
 
-The maintainers will perform the live acceptance scenarios in **Codex and
+The project owner will perform the live acceptance scenarios in **Codex and
 Antigravity**, with isolated synthetic profiles. Those conversations are still
 pending; this section records responsibility and scope, not completed results.
 
@@ -91,6 +105,8 @@ No external model sessions were launched. No global agent installation or agent
 configuration was changed. Installation-layout tests are not evidence that each
 model follows the instructions. [Agent scenarios](tests/agent-scenarios.md) specify
 the live checks still needed before claiming tested conversational compatibility.
+No live-agent sessions were launched for the planning update. New conversational
+plan/shopping-list scenarios are provided for the owner, not recorded as passed.
 
 The local baseline above used Windows/Python 3.12 and 3.14. Other local Python
 versions and macOS/Linux were not executed locally. The code targets Python

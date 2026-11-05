@@ -1,7 +1,10 @@
 # Security and privacy
 
 Meal Magic stores potentially sensitive household information locally: preferences,
-allergies, age-stage notes, declared practices, recipes and actual meal history.
+allergies, age-stage notes, declared practices, recipes, plans/shopping lists and
+actual meal history. Plan mutation receipts retain earlier request/response text
+for retry safety even after an active plan is removed; plan removal is not complete
+erasure of that text. JSON export contains current plans, not internal receipts.
 It is a single-household profile without per-member access control or encryption.
 OS file access and the host agent's permissions determine who can read it.
 
