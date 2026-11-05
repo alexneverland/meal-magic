@@ -9,6 +9,25 @@ Antigravity, and custom agents that can load instructions and execute local tool
 are documented; live model-session compatibility is not yet certified. See
 [VERIFICATION.md](VERIFICATION.md) for exactly what was tested.
 
+## Agent testing status
+
+Our conversational acceptance tests will run in **Codex and Antigravity**, using
+isolated synthetic household profiles. This is the agreed test plan, not a claim
+that those conversations have already passed.
+
+| Host | Live conversational testing | Evidence so far |
+|---|---|---|
+| Codex | Planned tests by the maintainers | Storage/lifecycle tests and installation-path checks; live skill discovery and conversations still pending |
+| Antigravity | Planned tests by the maintainers | Storage/lifecycle tests and installation-path checks; live App/CLI/IDE conversations still pending |
+| Claude Code | Not tested conversationally by the maintainers; community reports welcome | Documented installation and tested storage/lifecycle path; no verified live-model behavior |
+| Custom agents | Each integration needs its own validation | Shared JSON CLI and explicit-directory installer tested; no blanket host compatibility claim |
+
+Passing Python tests or CI does not verify how a host model follows the skill.
+Claude Code users can try the documented integration and report reproducible
+problems with synthetic examples through [issues](https://github.com/alexneverland/meal-magic/issues).
+See [the acceptance scenarios](tests/agent-scenarios.md) and
+[reporting guidance](CONTRIBUTING.md#reporting-agent-behavior).
+
 ## What it remembers
 
 - Ongoing likes, dislikes, prohibited foods/ingredients, stated allergies, and

@@ -54,6 +54,23 @@ until the initial PR is explicitly merged.
 
 ## Per-agent evidence
 
+### Agreed conversational test scope
+
+The maintainers will perform the live acceptance scenarios in **Codex and
+Antigravity**, with isolated synthetic profiles. Those conversations are still
+pending; this section records responsibility and scope, not completed results.
+
+**Claude Code remains conversationally untested by the maintainers.** Its
+installation instructions and shared storage/lifecycle tools are provided, and
+Claude Code users are welcome to submit synthetic reproductions and compatibility
+reports. Community reports must identify the tested host/model/version and are
+not automatically treated as independently verified maintainer results.
+
+Custom-agent support remains an integration contract requiring validation in
+each host. There is no claim that all agents discover or follow this skill.
+
+### Observed evidence
+
 | Host | Local version observed | Actually tested | Not tested |
 |---|---|---|---|
 | Codex | `codex-cli 0.166.0-alpha.6` | Version command; documented path mapping; install/update/uninstall and installed helper in a temporary synthetic project. The current Codex chat authored and ran the tests. | Fresh-session automatic discovery, explicit invocation, and conversational behavior after installation. |

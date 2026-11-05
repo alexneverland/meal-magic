@@ -56,3 +56,27 @@ decision; this initial setup does not enable auto-merge or auto-publication.
 Live agent checks should follow [the scenario protocol](tests/agent-scenarios.md)
 in isolated profiles. Record the actual host/model/version and observed results.
 Installation-path tests are not evidence of successful model behavior.
+
+## Reporting agent behavior
+
+The maintainers plan live conversational acceptance tests in **Codex and
+Antigravity**. These are distinct from the automated Python/storage tests and
+must use isolated synthetic profiles. Until recorded results exist, they remain
+pending rather than verified.
+
+Claude Code's installation is documented, but live conversations are **not tested
+by the maintainers**. Claude Code users can help by reporting reproducible behavior
+or compatibility issues. Custom-agent users should also identify their integration
+mechanism rather than assuming shared storage tests cover the host.
+
+For a public report, provide:
+
+- Skill version or commit, host name/version and model, if known.
+- OS/Python version and user/project/custom installation scope.
+- A synthetic conversation that reproduces the behavior and its expected result.
+- The observed result and relevant redacted tool error, if any.
+
+Do not attach your real household database, agent memory, credentials, private
+conversation history or raw logs containing personal data. A community report
+is useful evidence, but it does not become a verified maintainer result until
+reproduced and recorded with its actual scope.

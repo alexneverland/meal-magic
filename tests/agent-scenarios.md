@@ -7,6 +7,20 @@ because a command exited successfully: inspect stored state and the final answer
 
 These are a manual evaluation protocol, **not executed live-model tests**.
 
+## Who runs these checks
+
+The maintainers will run these conversational checks in **Codex and Antigravity**
+with isolated synthetic profiles. Execution and results are still pending.
+
+Claude Code has documented installation and tested shared storage/lifecycle paths,
+but live conversational behavior is **not tested by the maintainers**. Claude Code
+users may run this protocol and submit synthetic compatibility reports using
+[the contribution guidance](../CONTRIBUTING.md#reporting-agent-behavior). Record
+community-reported results as such; do not silently relabel them as maintainer tests.
+Each custom-agent integration likewise needs its own host evaluation.
+
+## Scenarios
+
 | Scenario / user messages | Observable pass criteria |
 |---|---|
 | First use with an empty profile, then "Skip the introduction." Start a fresh conversation. | Up to 4 short grouped questions about members/age stages, scoped allergies/exclusions, favorites, and optional locale/practices; optional setup; skipped state persists and the questionnaire does not repeat. |
