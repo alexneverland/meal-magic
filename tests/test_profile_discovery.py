@@ -469,9 +469,26 @@ print(json.dumps(store.handle({'action':'member-set','label':sys.argv[4]})))
             native = native_parent / fixture_name
             private = private_parent / fixture_name
             native.write_bytes(self.native.read_bytes())
+            if private.exists() and os.path.samefile(native, private):
+                # The volume alias is itself redirected: one physical fixture, not
+                # two profiles. Do not overwrite it with the second fixture payload.
+                self.paths = [native, private]
+                with patch.object(module, "legacy_view_redirected", return_value=True):
+                    with self.assertRaisesRegex(StoreError, "profile_discovery_incomplete_choose_source"):
+                        self.call()
+                    info = self.call("storage-info")["result"]
+                    self.assertEqual(len(info["legacy_candidates"]), 1)
+                    self.call("profile-select", database=info["legacy_candidates"][0]["database"])
+                    self.assertEqual(self.call()["result"]["household"]["members"][0]["label"],
+                                     "Synthetic native fixture")
+                return
+            # A distinct name avoids creating a new shadow that would hide the
+            # first fixture after its physical path was checked.
+            private = private_parent / ("private-" + fixture_name)
             private.write_bytes(self.private.read_bytes())
-            # The logical spelling sees private bytes, but native-volume discovery sees both.
-            self.assertEqual(self.digest(local / fixture_name), self.digest(private))
+            self.assertFalse(os.path.samefile(native, private))
+            self.assertNotEqual(module.profile_key(Path(module.physical_path(native))),
+                                module.profile_key(Path(module.physical_path(private))))
             self.assertNotEqual(self.digest(native), self.digest(private))
             self.paths = [native, private]
             with self.assertRaisesRegex(StoreError, "multiple_existing_profiles"):
@@ -480,7 +497,7 @@ print(json.dumps(store.handle({'action':'member-set','label':sys.argv[4]})))
         finally:
             for fixture in (native, private):
                 if fixture is not None:
-                    if fixture.name != fixture_name:
+                    if fixture.name not in (fixture_name, "private-" + fixture_name):
                         raise AssertionError("Unexpected synthetic cleanup target")
                     fixture.unlink(missing_ok=True)
             marker_path.unlink(missing_ok=True)
