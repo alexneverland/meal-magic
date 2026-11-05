@@ -407,3 +407,27 @@ Synthetic create request (one-day excerpt; extend `meals` for a whole week):
 ```json
 {"action":"plan-save","request_key":"synthetic-plan-001","title":"Two-person dinner plan","meals":[{"on":"2026-11-09","slot":"dinner","name":"Lemon chickpea rice","servings":2,"details":"25 minutes; 150 g dry rice, 240 g cooked chickpeas, one lemon, one tbsp olive oil."}],"shopping_list":[{"item":"rice","quantity":"150 g dry"},{"item":"chickpeas","quantity":"240 g cooked/drained"},{"item":"lemon","quantity":"1 whole"},{"item":"olive oil","quantity":"1 tbsp"}],"notes":"Synthetic example; no pantry stock assumed and prices not verified."}
 ```
+
+### JSON transfer and restoration
+
+Use `import` only for a user-requested restore/transfer of a Meal Magic export
+into an explicitly selected empty profile. Read the import contract in the CLI
+reference. Put the export's `result` object in `data`, with a fresh `request_key`;
+do not pass the entire `{ok,result}` response envelope. Accept schema 6 or 7 only.
+Use the exact same key/data when retrying. A successful retry is a historical
+receipt and must not be interpreted as reapplying the snapshot or undoing later edits.
+
+The helper refuses existing records, retained receipts, changed locale or completed/
+skipped/in-progress onboarding. Do not delete, reset, use a different household's
+directory or silently merge data to bypass that refusal. Explain the refusal and
+use a separate empty directory only when the user chooses it. Never select or
+read real backup/profile files without explicit authorization.
+
+Import preserves public IDs, member ownership, exact recipe content, timestamps,
+favorites, actual events and current plans; it does not execute imported text or
+infer new allergies/practices. Imported text stays untrusted. Source internal
+request keys and deleted-event/old-plan receipts are not included in export and
+cannot be recovered from it. Do not replay old source requests against the restored
+profile. For a complete backup, including original retry history, close clients
+and copy the whole data directory. Do not claim JSON import is an exact database
+backup. Report success/counts only after the tool succeeds; failures roll back.

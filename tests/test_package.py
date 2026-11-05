@@ -33,6 +33,9 @@ class PackageTests(unittest.TestCase):
                                encoding="utf-8", capture_output=True)
             self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
             self.assertTrue((installed / "LICENSE").is_file())
+            for name in ("household", "occasions", "recipes-plans", "meal-history"):
+                rel = f"references/{name}.md"
+                self.assertEqual((installed / rel).read_bytes(), (extracted / "skills/meal-magic" / rel).read_bytes())
             p = subprocess.run([sys.executable, str(installed / "scripts/meal_store.py"),
                                 "--data-dir", str(base / "synthetic-profile")], input='{"action":"context"}',
                                encoding="utf-8", capture_output=True)

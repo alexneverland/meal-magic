@@ -27,6 +27,69 @@ class InstallTests(unittest.TestCase):
         for agent, rel in expected.items():
             self.assertEqual(installer.destination(agent, "user", None, None, home=self.base), self.base / rel)
 
+    def test_new_install_contains_workflow_references(self):
+        target = self.base / "meal-magic"
+        installer.manage("install", target)
+        for name in ("household", "occasions", "recipes-plans", "meal-history"):
+            self.assertEqual((target / f"references/{name}.md").read_bytes(),
+                             (installer.SOURCE / f"references/{name}.md").read_bytes())
+
+    def legacy_install(self):
+        target = self.base / "meal-magic"
+        old_files = ("SKILL.md", "VERSION", "LICENSE", "scripts/meal_store.py", "references/storage-cli.md")
+        # Reproduce the previously shipped five-file manifest in a disposable target.
+        with patch.object(installer, "FILES", old_files):
+            installer.manage("install", target)
+        return target
+
+    def test_update_accepts_original_manifest_and_installs_all_references(self):
+        target = self.legacy_install()
+        data = self.base / "synthetic-data"
+        data.mkdir()
+        preserved = data / "keep.txt"
+        preserved.write_text("synthetic profile sentinel")
+        installer.manage("update", target)
+        installer.inspect_install(target)
+        for name in ("household", "occasions", "recipes-plans", "meal-history"):
+            self.assertTrue((target / f"references/{name}.md").is_file())
+        self.assertEqual(preserved.read_text(), "synthetic profile sentinel")
+
+    def test_original_manifest_uninstall_preserves_external_data(self):
+        target = self.legacy_install()
+        sentinel = self.base / "synthetic-data.txt"
+        sentinel.write_text("keep")
+        installer.manage("uninstall", target)
+        self.assertFalse(target.exists())
+        self.assertEqual(sentinel.read_text(), "keep")
+
+    def test_original_manifest_local_edits_and_unknown_files_remain_protected(self):
+        target = self.legacy_install()
+        original = (target / "SKILL.md").read_bytes()
+        (target / "SKILL.md").write_text("synthetic local edit")
+        for action in ("update", "uninstall"):
+            with self.assertRaises(installer.InstallError):
+                installer.manage(action, target)
+        self.assertEqual((target / "SKILL.md").read_text(), "synthetic local edit")
+        (target / "SKILL.md").write_bytes(original)
+        unknown = target / "keep.txt"
+        unknown.write_text("synthetic unknown file")
+        for action in ("update", "uninstall"):
+            with self.assertRaises(installer.InstallError):
+                installer.manage(action, target)
+        self.assertEqual(unknown.read_text(), "synthetic unknown file")
+
+    def test_partial_reference_manifest_is_refused_without_deletion(self):
+        target = self.base / "meal-magic"
+        installer.manage("install", target)
+        marker = target / installer.MARKER
+        data = json.loads(marker.read_text())
+        data["files"].pop("references/household.md", None)
+        marker.write_text(json.dumps(data))
+        for action in ("update", "uninstall"):
+            with self.assertRaisesRegex(installer.InstallError, "invalid_install_manifest"):
+                installer.manage(action, target)
+        self.assertTrue((target / "SKILL.md").exists())
+
     def test_full_lifecycle_for_each_agent_preserves_data(self):
         for agent in ("codex", "claude-code", "antigravity", "custom"):
             with self.subTest(agent=agent):

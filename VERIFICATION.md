@@ -1,14 +1,18 @@
 # Verification — 2026-11-05
 
-Version: **0.6.0**, source preview proposed through pull requests. Work was
+Version: **0.6.1**, source preview proposed through pull requests. Work was
 performed without subagents. No tagged release or agent-directory installation
 is implied by the source repository. Review/merge state is recorded in the
 corresponding pull request, not inferred from this report.
 
 ## Executed
 
-- Windows, Python **3.14.10**: **114/114 unittest tests passed** for the JSON import update.
-- Windows, Python **3.12.10**: **114/114 unittest tests passed** for the JSON import update.
+- Windows, Python **3.14.10**: **119/119 unittest tests passed** for the integrated import/reference update.
+- Windows, Python **3.12.10**: **119/119 unittest tests passed** for the integrated import/reference update.
+- Five new installer tests verify workflow reference installation, legacy manifest
+  update/uninstall, protection of local edits/unknown files and refusal of partial
+  manifests. The package verifies installed reference bytes. Workflow relocation
+  preserves the original detailed instructions; live reference-routing remains untested.
 - Fourteen new import tests verify complete cross-domain round trips preserving
   public IDs, exact Unicode/recipe content, favorites, member ownership, timestamps
   and plan revisions; schema-6 compatibility; type/date/field/reference validation;
@@ -105,7 +109,7 @@ corresponding pull request, not inferred from this report.
 - Repository validation checks required public files, local Markdown links, runtime
   imports against the standard library, and forbidden tracked paths in Git checkouts.
   It is a hygiene check, not an exhaustive security or secret-content audit.
-- The 0.6.0 source ZIP was built and inspected against the exact 28-file public
+- The 0.6.1 source ZIP was built and inspected against the exact 32-file public
   allowlist, with passing CRC verification and a matching SHA-256 sidecar. Generated
   archives and caches are not committed. `git diff --check` passed.
 - GitHub CI is configured for Windows/Linux/macOS with Python 3.10/3.14 and a stable
@@ -177,3 +181,7 @@ Official pages were opened and checked on 2026-11-05:
 
 The package is standalone. No external application's code, configuration,
 database or personal records is required, imported or bundled.
+
+No live-agent reference-routing evaluation was performed. Source preservation,
+link/installer/package checks do not prove unchanged model behavior; fresh-session
+comparison scenarios remain for the owner in Codex and Antigravity.

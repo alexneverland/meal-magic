@@ -14,7 +14,7 @@ import uuid
 from datetime import date, datetime, timezone
 from typing import Any
 
-VERSION = "0.6.0"
+VERSION = "0.6.1"
 KINDS = ("prefer", "avoid", "forbid", "allergy", "diet")
 AGE_GROUPS = ("unspecified", "infant", "young_child", "child", "teen", "adult", "older_adult")
 ALLERGY_STATUSES = ("unknown", "none_reported", "reported")
