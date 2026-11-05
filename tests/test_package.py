@@ -40,6 +40,23 @@ class PackageTests(unittest.TestCase):
             self.assertEqual(result["preferences"], [])
             self.assertEqual(result["recent_meals"], [])
             self.assertEqual(result["household"]["onboarding"]["status"], "pending")
+            request = {"action": "plan-save", "request_key": "package-plan", "title": "Synthetic dinner",
+                       "meals": [{"on": "2026-11-09", "slot": "dinner", "name": "Synthetic rice",
+                                  "servings": 2, "details": "150 g dry rice; cook according to packet."}],
+                       "shopping_list": [{"item": "rice", "quantity": "150 g dry"}]}
+            def invoke(req):
+                run = subprocess.run([sys.executable, str(installed / "scripts/meal_store.py"),
+                                      "--data-dir", str(base / "synthetic-profile")], input=json.dumps(req),
+                                     encoding="utf-8", capture_output=True)
+                self.assertEqual(run.returncode, 0, run.stdout + run.stderr)
+                return json.loads(run.stdout)["result"]
+            saved = invoke(request)
+            update = subprocess.run([sys.executable, str(extracted / "tools/manage_skill.py"), "update",
+                                     "--agent", "custom", "--destination", str(installed)],
+                                    encoding="utf-8", capture_output=True)
+            self.assertEqual(update.returncode, 0, update.stdout + update.stderr)
+            self.assertEqual(invoke({"action": "plan-get", "id": saved["id"]}), saved)
+            self.assertEqual(invoke({"action": "meal-list"}), [])
 
 
 if __name__ == "__main__":

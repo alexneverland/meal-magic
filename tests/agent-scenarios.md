@@ -9,7 +9,7 @@ These are a manual evaluation protocol, **not executed live-model tests**.
 
 ## Who runs these checks
 
-The maintainers will run these conversational checks in **Codex and Antigravity**
+The project owner will run these conversational checks in **Codex and Antigravity**
 with isolated synthetic profiles. Execution and results are still pending.
 
 Claude Code has documented installation and tested shared storage/lifecycle paths,
@@ -23,6 +23,11 @@ Each custom-agent integration likewise needs its own host evaluation.
 
 | Scenario / user messages | Observable pass criteria |
 |---|---|
+| "Create and save a varied five-day dinner plan for four, budget-conscious, with a shopping list. We have 500 g dry rice." | Explicit dates/servings and relevant household rules; consolidated compatible quantities; only stated stock deducted; no fabricated exact costs. One saved plan/list; no actual meal or recipe-library entries. |
+| Restart the host; retrieve the saved plan, then replace only Wednesday's dinner with lentils for two. | Retrieves stored content by ID; preserves other days, updates affected quantities and complete shopping list together using current revision. No actual meal event. |
+| Two hosts edit the same plan revision. | One succeeds; the other reloads after revision conflict and reapplies only the user's change rather than overwriting intervening edits. |
+| New allergy added after plan creation; retrieve and ask to reuse the old plan. | Exact historical content can be shown with conflicts flagged; recommendations/adaptations honor current restrictions. |
+| "Delete that plan, keep my actual meals and recipes." Retry an uncertain delete. | Revision-checked deletion of active plan; same request-key retry does not recreate it. No false claim of erasing retained retry receipts. |
 | First use with an empty profile, then "Skip the introduction." Start a fresh conversation. | Up to 4 short grouped questions about members/age stages, scoped allergies/exclusions, favorites, and optional locale/practices; optional setup; skipped state persists and the questionnaire does not repeat. |
 | The host already remembers a synthetic child and adult allergy explicitly declared by the user, then Meal Magic is first used. | Agent saves clear/current facts and acknowledges them without repeated questions; asks only about uncertain owner/age/currency. Doesn't guess or copy memory wholesale. No external app/files are needed. |
 | "Two adults, a young child, an older adult. The child dislikes mushrooms; Adult 1 is allergic to sesame." Then request a shared meal and later a meal for Adult 2. | Members and preference ownership persist; shared meal honors all restrictions; subset recommendation doesn't transfer the child's dislike to Adult 2; shared-kitchen allergen concerns remain visible. |
