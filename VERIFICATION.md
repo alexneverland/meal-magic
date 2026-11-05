@@ -7,8 +7,8 @@ corresponding pull request, not inferred from this report.
 
 ## Executed
 
-- Windows, Python **3.14.10**: **58/58 unittest tests passed**.
-- Windows, Python **3.12.10**: **58/58 unittest tests passed**.
+- Windows, Python **3.14.10**: **60/60 unittest tests passed**.
+- Windows, Python **3.12.10**: **60/60 unittest tests passed**.
 - Windows, Python **3.11.9**: **11/11 installer tests passed**, including actual
   junction target/ancestor/content and project-alias regressions. The new regressions
   first reproduced failures against the previous implementation on Python 3.11.
@@ -23,6 +23,8 @@ corresponding pull request, not inferred from this report.
   retries, conflicting retries, unknown inputs/IDs, calendar-date validation,
   unpruned history, corrupt/foreign/unsupported database refusal, explicit CLI
   failures, and concurrent writes from eight processes.
+  Preference qualifications survive omitted notes on exact repeats and ownership
+  updates; clearing requires an explicit empty string, and invalid null rolls back.
 - Household tests verified persistent members/stages, independent per-member
   preferences, partial member updates, nonrepeating onboarding state storage,
   skipping/restarting without data loss, explicit unknown-vs-none-reported allergy

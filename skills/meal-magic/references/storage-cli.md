@@ -131,7 +131,10 @@ Preference kinds: `prefer`, `avoid`, `forbid`, `allergy`, `diet`. The target is 
 text (ingredient, dish, or dietary pattern). Preserve qualifications in notes.
 Exact kind/target/member-scope repeats reuse the existing preference; synonyms and conflicts
 are resolved by the host model, not the storage tool. Providing an unknown update
-ID fails. Replacing notes replaces that field; read context before an update.
+ID fails. Omitting `notes` preserves existing qualifications both on an ID update
+and an exact kind/target/scope repeat; a new preference defaults to empty notes.
+Provide an explicit empty string to clear notes; null is rejected. Supplying a
+nonempty notes string replaces that field, so read context before an update.
 
 `member_id` is a returned member ID or null. On creation, omitting it means
 household-wide/unassigned. On update by preference ID, omitting it preserves that

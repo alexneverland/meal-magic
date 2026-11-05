@@ -65,6 +65,28 @@ class StoreTests(unittest.TestCase):
         self.assertEqual(one["id"], two["id"])
         self.assertEqual(len(self.call("context")["preferences"]), 1)
 
+    def test_preference_qualifications_survive_repeat_and_ownership_update(self):
+        notes = "Synthetic qualification: also avoid cross-contact from shared equipment."
+        first = self.call("preference-set", kind="allergy", target="sesame", notes=notes)
+        repeated = self.call("preference-set", kind="allergy", target="sesame")
+        self.assertEqual(repeated["id"], first["id"])
+        self.assertEqual(repeated["notes"], notes)
+        member = self.call("member-set", label="Adult 1")
+        updated = self.call("preference-set", id=first["id"], kind="allergy", target="sesame", member_id=member["id"])
+        self.assertEqual(updated["notes"], notes)
+        self.assertEqual(updated["member_id"], member["id"])
+        self.assertEqual(self.call("context")["preferences"][0]["notes"], notes)
+
+    def test_preference_notes_require_explicit_clear_and_invalid_null_rolls_back(self):
+        first = self.call("preference-set", kind="forbid", target="synthetic ingredient", notes="Important qualification")
+        with self.assertRaisesRegex(StoreError, "invalid_notes"):
+            self.call("preference-set", id=first["id"], kind="forbid", target="synthetic ingredient", notes=None)
+        self.assertEqual(self.call("context")["preferences"][0]["notes"], "Important qualification")
+        cleared = self.call("preference-set", id=first["id"], kind="forbid", target="synthetic ingredient", notes="")
+        self.assertEqual(cleared["notes"], "")
+        new = self.call("preference-set", kind="prefer", target="synthetic rice")
+        self.assertEqual(new["notes"], "")
+
     def test_recipe_versions_and_exact_unicode_retrieval(self):
         content = "\nΣυνθετική συνταγή\nΥλικά: ρύζι και λεμόνι.\n1. Βράσε το ρύζι.\n"
         one = self.save(content=content)

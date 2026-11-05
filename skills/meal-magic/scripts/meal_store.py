@@ -355,9 +355,6 @@ class Store:
         kind = text_field(req, "kind")
         if kind not in KINDS:
             raise StoreError("invalid_preference_kind")
-        notes = req.get("notes", "")
-        if not isinstance(notes, str) or len(notes) > 4000:
-            raise StoreError("invalid_notes")
         previous = None
         if "id" in req:
             ident = text_field(req, "id", limit=200)
@@ -374,6 +371,9 @@ class Store:
             previous = con.execute("SELECT * FROM preferences WHERE kind=? AND target=? AND member_id IS ?",
                                    (kind, target, member_id)).fetchone()
             ident = previous["id"] if previous else uuid.uuid4().hex
+        notes = req.get("notes", previous["notes"] if previous else "")
+        if not isinstance(notes, str) or len(notes) > 4000:
+            raise StoreError("invalid_notes")
         con.execute("INSERT INTO preferences (id,kind,target,notes,updated_at,member_id) VALUES (?,?,?,?,?,?) "
                     "ON CONFLICT(id) DO UPDATE SET kind=excluded.kind,target=excluded.target,"
                     "notes=excluded.notes,updated_at=excluded.updated_at,member_id=excluded.member_id",
