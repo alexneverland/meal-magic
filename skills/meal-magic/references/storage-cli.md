@@ -28,7 +28,7 @@ Precedence: `--data-dir PATH`, then `MEAL_MAGIC_DATA_DIR`, then:
 
 | OS | Default |
 |---|---|
-| Windows | `%LOCALAPPDATA%/MealMagic` (fallback: `~/AppData/Local/MealMagic`) |
+| Windows (0.6.2+) | `~/.meal-magic/data` (OS user home, outside AppData) |
 | macOS | `~/Library/Application Support/MealMagic` |
 | Linux/other | `$XDG_DATA_HOME/meal-magic` (fallback: `~/.local/share/meal-magic`) |
 
@@ -53,6 +53,56 @@ restore the pre-upgrade backup if reverting. Unknown versions or foreign databas
 are refused, never reset.
 The tool does not prune history. Listing limits do not delete stored records.
 
+### Windows shared discovery (0.6.2+)
+
+Without an explicit directory or environment override, discover existing Meal Magic
+databases before creating a new profile. Known candidates are the native old
+LocalAppData/MealMagic path (both the environment and OS-user-home spelling), and
+exact LocalCache/Local/MealMagic paths under the user's MSIX packages. Windows
+volume aliases distinguish native files from AppData overlays; OS ACLs and host
+permissions remain in force. Links/reparse points are refused, and unsupported,
+inaccessible or corrupt candidates fail closed. No unrelated application records
+or arbitrary backup files are searched.
+
+One distinct populated candidate is adopted automatically through a complete SQLite
+backup, including internal retry receipts and committed WAL data; exact logical
+duplicates are one choice. Empty pending/in-progress shells with unknown locale
+and no domain rows/receipts do not override populated candidates. Other onboarding
+states or configured locale count as saved state. With no populated candidate,
+an existing empty shell is retained, or a new profile is initialized after discovery.
+Only a staged copy is migrated/validated. Source writer reservations and a shared
+startup lock prevent competing adoption; atomic no-replace publication never
+overwrites the target. Sources remain intact. The database schema stays at 7.
+
+`multiple_existing_profiles`: call `storage-info`, explain candidate counts and ask
+which profile to use. With explicit authorization, pass that exact discovered
+`database` value to `profile-select`. Arbitrary paths are refused. The choice is
+remembered; repeating the same choice is safe, while choosing another after shared
+initialization fails `shared_profile_already_initialized`. Never delete/reset an
+existing shared profile to make selection work. Explicit path/environment overrides
+are independent selections and do not discover or migrate any other profile.
+
+All hosts must update their skill before sharing this default. Old helpers still
+use old paths. Later changes to retained legacy sources fail with
+`legacy_profile_changed_after_adoption`; stop and explain divergent state, never
+merge or overwrite it. `shared_profile_missing` and `shared_profile_identity_changed`
+protect previously initialized profiles from silent recreation or replacement.
+Malformed identity metadata fails `invalid_profile_origins`; busy sources/startup
+locks fail or time out rather than pretending the profile is empty. Preserve all
+files and the user's current request on failure.
+
+`storage-info` creates no database, marker or startup directory. It reports local
+paths, the OS-opened physical database path when present, candidate row counts,
+and the shared `profile_id` after initialization. It is not a profile export and
+does not prove conversational behavior. Successful `context` envelopes have the
+same information in a separate top-level `storage` object; `result` is unchanged.
+`.origins.json` stores profile identity, physical file identity and hashes of full
+legacy logical state (including receipts), not a second copy of household text.
+Its recorded paths never authorize reads beyond independently discovered locations.
+Include it in a closed-client whole-directory backup. A restored copy has a new OS
+file identity: use a deliberate explicit directory for inspection/recovery rather
+than editing/removing this guard. Keep metadata and diagnostics outside repositories.
+
 ## Actions
 
 Fields not listed for the action are rejected as `unknown_fields` before opening
@@ -63,6 +113,8 @@ intent or decides whether an ingredient meets dietary requirements.
 
 | Action | Required fields | Optional fields | Result |
 |---|---|---|---|
+| `storage-info` | — | — | Read-only location, physical path, shared identity and legacy candidate counts |
+| `profile-select` | `database` | — | Explicitly choose one discovered Windows legacy profile before shared initialization |
 | `context` | — | `limit` (1–100, default 20), `on` (ISO date) | Household, locale, observances, onboarding, all scoped preferences and recent meals; optional date context |
 | `onboarding-set` | `status` | — | Onboarding status and update timestamp |
 | `member-set` | `label` | `id` for update, `age_group`, `allergy_status`, `notes` | Saved household member |

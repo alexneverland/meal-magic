@@ -13,10 +13,10 @@ from build_package import PUBLIC_FILES, ROOT
 
 def forbidden_path(path: str) -> bool:
     parts = Path(path).parts
-    if any(part in {"__pycache__", ".venv", "venv", "dist", "MealMagic", ".meal-magic-data"} for part in parts):
+    if any(part in {"__pycache__", ".venv", "venv", "dist", "MealMagic", ".meal-magic-data", ".meal-magic"} for part in parts):
         return True
     name = Path(path).name.lower()
-    return (name == ".env" or name.startswith(".env.") or
+    return (name in {".env", ".origins.json"} or name.startswith(".env.") or
             name.startswith(("credentials.", "secrets.")) or
             any(name.endswith(ext) or ext + "-" in name for ext in (".db", ".sqlite", ".sqlite3")) or
             name.endswith((".pyc", ".pyo")))

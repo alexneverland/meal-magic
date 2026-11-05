@@ -18,7 +18,7 @@ PUBLIC_FILES = (
     "tools/manage_skill.py", "tools/build_package.py", "tools/check_repository.py",
     "tests/test_store.py", "tests/test_household.py", "tests/test_observances.py",
     "tests/test_install.py", "tests/test_package.py", "tests/test_plans.py", "tests/test_meal_members.py",
-    "tests/test_import.py", "tests/agent-scenarios.md",
+    "tests/test_import.py", "tests/test_profile_discovery.py", "tests/agent-scenarios.md",
 )
 
 

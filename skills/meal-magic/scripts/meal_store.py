@@ -3,18 +3,22 @@
 from __future__ import annotations
 
 import argparse
+from contextlib import contextmanager, closing
 import hashlib
 import json
 import os
 from pathlib import Path
 import sqlite3
 import sys
+import tempfile
+import time
 import unicodedata
 import uuid
 from datetime import date, datetime, timezone
 from typing import Any
+from urllib.parse import quote
 
-VERSION = "0.6.1"
+VERSION = "0.6.2"
 KINDS = ("prefer", "avoid", "forbid", "allergy", "diet")
 AGE_GROUPS = ("unspecified", "infant", "young_child", "child", "teen", "adult", "older_adult")
 ALLERGY_STATUSES = ("unknown", "none_reported", "reported")
@@ -30,10 +34,330 @@ def default_data_dir() -> Path:
     if override:
         return Path(override).expanduser().resolve()
     if sys.platform == "win32":
-        return Path(os.environ.get("LOCALAPPDATA", Path.home() / "AppData/Local")) / "MealMagic"
+        return Path.home() / ".meal-magic" / "data"
     if sys.platform == "darwin":
         return Path.home() / "Library/Application Support/MealMagic"
     return Path(os.environ.get("XDG_DATA_HOME", Path.home() / ".local/share")) / "meal-magic"
+
+
+def checked_path(path: Path) -> Path:
+    """Refuse links/reparse points; never follow discovery outside known locations."""
+    path = Path(os.path.abspath(path.expanduser()))
+    for part in (path, *path.parents):
+        try:
+            info = part.lstat()
+        except FileNotFoundError:
+            continue
+        if part.is_symlink() or getattr(info, "st_file_attributes", 0) & 0x400:
+            raise StoreError("redirected_profile_path")
+    return path
+
+
+def native_windows_path(path: Path) -> Path:
+    """Address the local volume, including native AppData hidden by an MSIX overlay.
+
+    This is a filesystem alias, not privilege escalation: normal Windows ACLs apply.
+    No package names or host-specific storage implementation are required.
+    """
+    import ctypes
+    from ctypes import wintypes
+    path = checked_path(path)
+    if str(path).startswith("\\\\"):
+        return path
+    kernel = ctypes.WinDLL("kernel32", use_last_error=True)
+    kernel.GetVolumePathNameW.argtypes = [wintypes.LPCWSTR, wintypes.LPWSTR, wintypes.DWORD]
+    kernel.GetVolumeNameForVolumeMountPointW.argtypes = [wintypes.LPCWSTR, wintypes.LPWSTR, wintypes.DWORD]
+    mount, volume = ctypes.create_unicode_buffer(32768), ctypes.create_unicode_buffer(1024)
+    if not kernel.GetVolumePathNameW(str(path), mount, len(mount)):
+        raise StoreError("profile_volume_unavailable")
+    if not kernel.GetVolumeNameForVolumeMountPointW(mount.value, volume, len(volume)):
+        raise StoreError("profile_volume_unavailable")
+    return checked_path(Path(volume.value) / path.relative_to(mount.value))
+
+
+def windows_legacy_paths() -> list[Path]:
+    """Only inspect exact MealMagic paths, never unrelated package contents."""
+    user_local = Path.home() / "AppData" / "Local"
+    roots = {native_windows_path(Path(os.environ.get("LOCALAPPDATA", user_local))),
+             native_windows_path(user_local)}
+    paths = []
+    for local in sorted(roots):
+        paths.append(local / "MealMagic" / "meal-magic.sqlite3")
+        packages = checked_path(local / "Packages")
+        if packages.exists():
+            for package in sorted(packages.iterdir()):
+                # Do not enter links, unrelated package content, backups or arbitrary directories.
+                if package.is_symlink() or getattr(package.lstat(), "st_file_attributes", 0) & 0x400:
+                    continue
+                paths.append(package / "LocalCache" / "Local" / "MealMagic" / "meal-magic.sqlite3")
+    return paths
+
+
+def sqlite_uri(path: Path, mode: str = "ro") -> str:
+    # Encode backslashes and '?' as well: Path.as_uri loses Windows volume-GUID prefixes.
+    return "file:" + quote(str(path), safe="") + "?mode=" + mode
+
+
+def physical_path(path: Path) -> str | None:
+    """Report the file opened by the OS, not just a potentially virtualized spelling."""
+    if not path.exists():
+        return None
+    if sys.platform != "win32":
+        return str(path.resolve())
+    import ctypes
+    import msvcrt
+    from ctypes import wintypes
+    kernel = ctypes.WinDLL("kernel32", use_last_error=True)
+    kernel.GetFinalPathNameByHandleW.argtypes = [wintypes.HANDLE, wintypes.LPWSTR,
+                                                wintypes.DWORD, wintypes.DWORD]
+    with path.open("rb") as source:
+        buffer = ctypes.create_unicode_buffer(32768)
+        size = kernel.GetFinalPathNameByHandleW(msvcrt.get_osfhandle(source.fileno()), buffer, len(buffer), 0)
+        if not size or size >= len(buffer):
+            raise StoreError("profile_physical_path_unavailable")
+        return buffer.value
+
+
+def profile_snapshot(path: Path) -> tuple[sqlite3.Connection, bool, str]:
+    """Consistent SQLite snapshot, including WAL and internal retry receipts."""
+    memory = sqlite3.connect(":memory:")
+    deadline = time.monotonic() + 10
+    def progress(status: int, remaining: int, total: int) -> None:
+        if time.monotonic() > deadline:
+            raise StoreError("profile_busy_retry")
+    try:
+        with closing(sqlite3.connect(sqlite_uri(path), uri=True, timeout=10)) as source:
+            source.backup(memory, pages=128, progress=progress, sleep=0.01)
+        version = memory.execute("PRAGMA user_version").fetchone()[0]
+        tables = {r[0] for r in memory.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+        expected = {"preferences", "recipes", "meals"}
+        if version >= 2:
+            expected |= {"members", "onboarding"}
+        if version >= 3:
+            expected |= {"locale", "observances"}
+        if version >= 4:
+            expected |= {"plans", "plan_requests"}
+        if version >= 5:
+            expected |= {"meal_members"}
+        if version >= 6:
+            expected |= {"meal_requests"}
+        if version >= 7:
+            expected |= {"import_requests"}
+        if version not in range(1, 8) or tables != expected:
+            raise StoreError("unrecognized_legacy_profile")
+        if memory.execute("PRAGMA quick_check").fetchall() != [("ok",)]:
+            raise StoreError("invalid_legacy_profile")
+        if memory.execute("PRAGMA foreign_key_check").fetchone():
+            raise StoreError("invalid_legacy_profile")
+        meaningful = any(memory.execute('SELECT 1 FROM "' + table + '" LIMIT 1').fetchone()
+                         for table in tables - {"onboarding", "locale"})
+        if "onboarding" in tables:
+            rows = memory.execute("SELECT status FROM onboarding WHERE singleton=1").fetchall()
+            if len(rows) != 1 or rows[0][0] not in ("pending", "in_progress", "completed", "skipped"):
+                raise StoreError("invalid_legacy_profile")
+            meaningful |= rows[0][0] in ("completed", "skipped")
+        if "locale" in tables:
+            rows = memory.execute("SELECT country,region,timezone,holiday_mode FROM locale WHERE singleton=1").fetchall()
+            if len(rows) != 1:
+                raise StoreError("invalid_legacy_profile")
+            meaningful |= rows[0] != (None, None, None, "unknown")
+        # Hash full logical state, including deleted-event/old-plan receipts; never log its text.
+        fingerprint = hashlib.sha256("\n".join(sorted(memory.iterdump())).encode("utf-8")).hexdigest()
+        return memory, bool(meaningful), fingerprint
+    except Exception:
+        memory.close()
+        raise
+
+
+@contextmanager
+def profile_lock(directory: Path):
+    """Serialize discovery, publication and writes across agents; OS releases on crash."""
+    checked_path(directory).mkdir(parents=True, exist_ok=True, mode=0o700)
+    lock_path = checked_path(directory / ".startup.lock")
+    with lock_path.open("a+b") as lock:
+        if lock.seek(0, 2) == 0:
+            lock.write(b"0")
+            lock.flush()
+        deadline = time.monotonic() + 10
+        if os.name == "nt":
+            import msvcrt
+            def acquire():
+                lock.seek(0)
+                msvcrt.locking(lock.fileno(), msvcrt.LK_NBLCK, 1)
+            def release():
+                lock.seek(0)
+                msvcrt.locking(lock.fileno(), msvcrt.LK_UNLCK, 1)
+        else:
+            import fcntl
+            def acquire():
+                fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            def release():
+                fcntl.flock(lock, fcntl.LOCK_UN)
+        while True:
+            try:
+                acquire()
+                break
+            except OSError:
+                if time.monotonic() > deadline:
+                    raise StoreError("profile_busy_retry") from None
+                time.sleep(0.02)
+        try:
+            yield
+        finally:
+            release()
+
+
+def discover_profiles(target: Path) -> list[Path]:
+    found, identities = [], set()
+    for path in windows_legacy_paths():
+        try:
+            path.lstat()
+        except FileNotFoundError:
+            continue
+        path = checked_path(path)
+        info = path.stat()
+        if not path.is_file():
+            raise StoreError("invalid_legacy_profile")
+        identity = (info.st_dev, info.st_ino)
+        if identity not in identities:
+            identities.add(identity)
+            if not target.exists() or not os.path.samefile(path, target):
+                found.append(path)
+    return found
+
+
+def read_origins(marker: Path) -> dict | None:
+    if not marker.exists():
+        return None
+    try:
+        data = json.loads(marker.read_text(encoding="utf-8"))
+        def hex_string(value, length):
+            return isinstance(value, str) and len(value) == length and all(c in "0123456789abcdef" for c in value)
+        identity = data.get("database_identity") if isinstance(data, dict) else None
+        if (not isinstance(data, dict) or set(data) != {"schema", "profile_id", "sources", "state",
+                                                      "database_identity", "selected_source"} or
+                type(data["schema"]) is not int or data["schema"] != 1 or
+                not hex_string(data["profile_id"], 32) or not isinstance(data["sources"], dict) or
+                data["state"] not in ("publishing", "ready") or
+                any(not isinstance(k, str) or not k or not hex_string(v, 64)
+                    for k, v in data["sources"].items()) or
+                (data["selected_source"] is not None and not isinstance(data["selected_source"], str)) or
+                (identity is not None and (not isinstance(identity, list) or len(identity) != 2 or
+                                          any(type(v) is not int or v < 0 for v in identity)))):
+            raise ValueError
+        return data
+    except (ValueError, UnicodeError):
+        raise StoreError("invalid_profile_origins") from None
+
+
+def write_origins(marker: Path, data: dict) -> None:
+    temporary = None
+    try:
+        with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", prefix=".origins-",
+                                         suffix=".tmp", dir=marker.parent, delete=False) as output:
+            temporary = Path(output.name)
+            json.dump(data, output)
+            output.flush()
+            os.fsync(output.fileno())
+        os.replace(temporary, marker)
+    finally:
+        if temporary is not None:
+            temporary.unlink(missing_ok=True)
+
+
+def prepare_shared_profile(target: Path, selected_database: str | None = None) -> None:
+    """Adopt one unambiguous legacy profile without overwriting or removing sources."""
+    target = checked_path(target)
+    marker = checked_path(target.parent / ".origins.json")
+    paths = discover_profiles(target)
+    origins = read_origins(marker)
+    # Stored paths are descriptive only. Never use this JSON to authorize reads
+    # outside the exact legacy locations independently discovered above.
+    snapshots, source_locks = [], []
+    try:
+        if origins is not None and origins["state"] == "ready" and not target.exists():
+            raise StoreError("shared_profile_missing")
+        if target.exists():
+            con = sqlite3.connect(sqlite_uri(target, "rw"), uri=True, timeout=10)
+            source_locks.append(con)
+            con.execute("BEGIN IMMEDIATE")
+            info = target.stat()
+            if (origins is not None and origins.get("database_identity") is not None and
+                    origins["database_identity"] != [info.st_dev, info.st_ino]):
+                raise StoreError("shared_profile_identity_changed")
+        # Reserve source writers while taking and publishing a committed snapshot.
+        for path in sorted(paths, key=str):
+            con = sqlite3.connect(sqlite_uri(path, "rw"), uri=True, timeout=10)
+            source_locks.append(con)
+            con.execute("BEGIN IMMEDIATE")
+            snapshot, meaningful, fingerprint = profile_snapshot(path)
+            snapshots.append((path, snapshot, meaningful, fingerprint))
+        if origins is not None and target.exists():
+            if selected_database is not None:
+                chosen = origins.get("selected_source")
+                if chosen is None or Path(chosen) != Path(selected_database):
+                    raise StoreError("shared_profile_already_initialized")
+            for path, snapshot, meaningful, fingerprint in snapshots:
+                old = origins["sources"].get(str(path))
+                if old is not None and old != fingerprint or old is None and meaningful:
+                    raise StoreError("legacy_profile_changed_after_adoption")
+            if origins["state"] == "publishing":
+                origins["state"] = "ready"
+                write_origins(marker, origins)
+            return
+        meaningful = [item for item in snapshots if item[2]]
+        if selected_database is None and len({item[3] for item in meaningful}) > 1:
+            raise StoreError("multiple_existing_profiles")
+        selected = (meaningful or snapshots or [None])[0]
+        if selected_database is not None:
+            selected = next((item for item in snapshots if item[0] == Path(selected_database)), None)
+            if selected is None:
+                raise StoreError("profile_candidate_not_found")
+            if target.exists():
+                raise StoreError("shared_profile_already_initialized")
+        if target.exists() and selected:
+            current, occupied, fingerprint = profile_snapshot(target)
+            current.close()
+            if selected[2] and fingerprint != selected[3]:
+                raise StoreError("multiple_existing_profiles")
+        record = {"schema": 1, "profile_id": uuid.uuid4().hex,
+                  "state": "ready" if target.exists() else "publishing",
+                  "sources": {str(item[0]): item[3] for item in snapshots},
+                  "selected_source": str(selected[0]) if selected else None,
+                  "database_identity": None}
+        if target.exists():
+            info = target.stat()
+            record["database_identity"] = [info.st_dev, info.st_ino]
+        if origins is not None and not target.exists():
+            # An interrupted initial publication may retry, but never silently replace a profile identity.
+            record["profile_id"] = origins.get("profile_id", record["profile_id"])
+        with tempfile.TemporaryDirectory(prefix=".meal-magic-adopt-", dir=target.parent) as temporary:
+            stage_dir = Path(temporary)
+            stage = stage_dir / "meal-magic.sqlite3"
+            if not target.exists():
+                if selected:
+                    with closing(sqlite3.connect(stage)) as destination:
+                        selected[1].backup(destination)
+                # Migrate/validate only the staging copy; receipts stay in the complete DB.
+                candidate = Store(stage_dir)
+                candidate.handle({"action": "context"})
+                candidate.handle({"action": "export"})
+                with stage.open("r+b") as staged:
+                    os.fsync(staged.fileno())
+                info = stage.stat()
+                record["database_identity"] = [info.st_dev, info.st_ino]
+            write_origins(marker, record)
+            if stage.exists():
+                # Atomic no-replace publication also protects against explicit-path callers.
+                os.link(stage, target)
+                record["state"] = "ready"
+                write_origins(marker, record)
+    finally:
+        for item in snapshots:
+            item[1].close()
+        for con in source_locks:
+            con.rollback()
+            con.close()
 
 
 def normalized(value: str) -> str:
@@ -237,11 +561,35 @@ class Store:
     """Single-user store shared by agents; each request is one transaction."""
 
     def __init__(self, data_dir: Path | str | None = None):
-        self.data_dir = Path(data_dir).expanduser().resolve() if data_dir else default_data_dir().resolve()
+        self.shared_windows = (data_dir is None and not os.environ.get("MEAL_MAGIC_DATA_DIR")
+                               and sys.platform == "win32")
+        selected = Path(data_dir).expanduser() if data_dir else default_data_dir()
+        self.data_dir = checked_path(selected) if self.shared_windows else selected.resolve()
         install = Path(__file__).resolve().parents[1]
         if self.data_dir == install or install in self.data_dir.parents:
             raise StoreError("data_directory_inside_skill")
         self.path = self.data_dir / "meal-magic.sqlite3"
+
+    def _storage_info(self) -> dict:
+        result = {"directory": str(self.data_dir), "database": str(self.path),
+                  "physical_database": physical_path(self.path), "exists": self.path.is_file(),
+                  "selection": "shared_windows_default" if self.shared_windows else "explicit_or_platform_default",
+                  "profile_id": None, "legacy_candidates": []}
+        if self.shared_windows:
+            checked_path(self.data_dir)
+            marker = checked_path(self.data_dir / ".origins.json")
+            data = read_origins(marker)
+            if data:
+                result["profile_id"] = data["profile_id"]
+            for path in discover_profiles(self.path):
+                snapshot, meaningful, fingerprint = profile_snapshot(path)
+                tables = {r[0] for r in snapshot.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+                counts = {table: snapshot.execute('SELECT count(*) FROM "' + table + '"').fetchone()[0]
+                          for table in ("members", "preferences", "recipes", "meals", "plans") if table in tables}
+                snapshot.close()
+                result["legacy_candidates"].append({"database": str(path),
+                                                     "has_saved_state": meaningful, "counts": counts})
+        return result
 
     def _connect(self) -> sqlite3.Connection:
         self.data_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
@@ -319,6 +667,8 @@ class Store:
     def handle(self, req: dict[str, Any]) -> dict[str, Any]:
         """Execute one explicit structured action; never infer conversational intent."""
         actions = {
+            "storage-info": (None, set()),
+            "profile-select": (None, {"database"}),
             "context": (self._context, {"limit", "on"}),
             "onboarding-set": (self._onboarding_set, {"status"}),
             "member-set": (self._member_set, {"id", "label", "age_group", "allergy_status", "notes"}),
@@ -352,11 +702,31 @@ class Store:
         fn, allowed = actions[action]
         if set(req) - allowed - {"action"}:
             raise StoreError("unknown_fields")
+        if action == "storage-info":
+            return {"ok": True, "result": self._storage_info()}
+        if action == "profile-select":
+            if not self.shared_windows:
+                raise StoreError("profile_selection_requires_windows_default")
+            selected = text_field(req, "database", limit=32768)
+            with profile_lock(self.data_dir):
+                prepare_shared_profile(self.path, selected)
+                return {"ok": True, "result": self._storage_info()}
+        if self.shared_windows:
+            checked_path(self.data_dir)
+            with profile_lock(self.data_dir):
+                prepare_shared_profile(self.path)
+                return self._execute(fn, req)
+        return self._execute(fn, req)
+
+    def _execute(self, fn, req: dict) -> dict:
         con = self._connect()
         try:
             with con:
                 result = fn(con, req)
-            return {"ok": True, "result": result}
+            output = {"ok": True, "result": result}
+            if req["action"] == "context":
+                output["storage"] = self._storage_info()
+            return output
         finally:
             con.close()
 
