@@ -13,7 +13,9 @@ import tempfile
 
 NAME = "meal-magic"
 MARKER = ".meal-magic-install.json"
-FILES = ("SKILL.md", "VERSION", "LICENSE", "scripts/meal_store.py", "references/storage-cli.md")
+LEGACY_FILES = ("SKILL.md", "VERSION", "LICENSE", "scripts/meal_store.py", "references/storage-cli.md")
+FILES = LEGACY_FILES + ("references/household.md", "references/occasions.md",
+                        "references/recipes-plans.md", "references/meal-history.md")
 SOURCE = Path(__file__).resolve().parents[1] / "skills" / NAME
 
 
@@ -85,9 +87,9 @@ def inspect_install(path: Path) -> None:
     if not isinstance(data, dict) or data.get("name") != NAME or data.get("schema") != 1:
         raise InstallError("invalid_install_marker")
     hashes = data.get("files")
-    if not isinstance(hashes, dict) or set(hashes) != set(FILES):
+    if not isinstance(hashes, dict) or set(hashes) not in (set(FILES), set(LEGACY_FILES)):
         raise InstallError("invalid_install_manifest")
-    expected = set(FILES) | {MARKER}
+    expected = set(hashes) | {MARKER}
     actual = set()
     allowed_dirs = {"scripts", "references"}
     for entry in path.rglob("*"):
@@ -98,7 +100,7 @@ def inspect_install(path: Path) -> None:
             actual.add(rel)
         elif rel not in allowed_dirs:
             raise InstallError("unexpected_install_content")
-    if actual != expected or any(digest(path / rel) != hashes[rel] for rel in FILES):
+    if actual != expected or any(digest(path / rel) != hashes[rel] for rel in hashes):
         raise InstallError("modified_installation_refused_save_your_changes_first")
 
 

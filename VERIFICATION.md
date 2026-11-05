@@ -1,14 +1,23 @@
 # Verification — 2026-11-05
 
-Version: **0.5.0**, source preview proposed through pull requests. Work was
+Version: **0.5.1**, source preview proposed through pull requests. Work was
 performed without subagents. No tagged release or agent-directory installation
 is implied by the source repository. Review/merge state is recorded in the
 corresponding pull request, not inferred from this report.
 
 ## Executed
 
-- Windows, Python **3.14.10**: **100/100 unittest tests passed** for the member-history update and review fixes.
-- Windows, Python **3.12.10**: **100/100 unittest tests passed** for the member-history update and review fixes.
+- Windows, Python **3.14.10**: **105/105 unittest tests passed** for the instruction/reference reorganization.
+- Windows, Python **3.12.10**: **105/105 unittest tests passed** for the instruction/reference reorganization.
+- Five new installer tests cover the workflow-reference files in installations,
+  upgrade/uninstall from the original five-file manifest, protection of modified
+  and unknown legacy files, and refusal of partial reference manifests. The package
+  test verifies the extracted installed reference bytes match the source package.
+  The original workflow sections were compared verbatim after relocation, allowing
+  only relative-link adjustments. Main SKILL.md shrank from 3,054 to 793 words
+  (317 to 89 lines); the change is instruction organization, not schema behavior.
+- Prior v0.5 member-history/review baseline: **100/100 tests passed** on Windows
+  with Python 3.12.10 and 3.14.10. Those tests remain in the current suite.
 - Nineteen new synthetic membership tests cover separate dishes, independent
   cooked/eaten membership, unspecified attendance, per-member filtering before
   limits, reordered/conflicting retries, malformed/unknown IDs, the 100-member
@@ -89,7 +98,7 @@ corresponding pull request, not inferred from this report.
 - Repository validation checks required public files, local Markdown links, runtime
   imports against the standard library, and forbidden tracked paths in Git checkouts.
   It is a hygiene check, not an exhaustive security or secret-content audit.
-- The 0.5.0 source ZIP was built and inspected against the exact 27-file public
+- The 0.5.1 source ZIP was built and inspected against the exact 31-file public
   allowlist, with passing CRC verification and a matching SHA-256 sidecar. Generated
   archives and caches are not committed. `git diff --check` passed.
 - GitHub CI is configured for Windows/Linux/macOS with Python 3.10/3.14 and a stable
@@ -134,6 +143,10 @@ Audience continuity, separate dishes, temporary ingredients and correct assignme
 from actual conversational reports have additional manual acceptance scenarios;
 their presence is not evidence that a host model passed them. There is no pantry
 storage, quantity/expiry tracking, medical inference or automatic meal attendance.
+No live-agent reference-routing evaluation was performed for the instruction
+reorganization. Source-section preservation and installer/link/package tests do
+not prove unchanged host-model behavior; fresh-session comparison scenarios remain
+for the owner in Codex and Antigravity.
 
 The local baseline above used Windows/Python 3.12 and 3.14. Other local Python
 versions and macOS/Linux were not executed locally. The code targets Python

@@ -5,7 +5,7 @@ remember food preferences and restrictions, keep an actual meal history, and
 save recipes and favorites. One shared Python core works with Codex, Claude Code,
 Antigravity, and custom agents that can load instructions and execute local tools.
 
-**Version 0.5.0 — source preview, no tagged release yet.** Agent installation layouts
+**Version 0.5.1 — source preview, no tagged release yet.** Agent installation layouts
 are documented; live model-session compatibility is not yet certified. See
 [VERIFICATION.md](VERIFICATION.md) for exactly what was tested.
 
@@ -109,7 +109,7 @@ To build a local review archive (without publishing anything):
 python tools/build_package.py
 ```
 
-This writes `dist/meal-magic-0.5.0.zip` and a SHA-256 sidecar. Packaging uses an
+This writes `dist/meal-magic-0.5.1.zip` and a SHA-256 sidecar. Packaging uses an
 explicit source-file allowlist, so databases, caches, personal settings, and
 untracked files cannot enter the archive through directory scanning.
 
@@ -640,6 +640,14 @@ skills/meal-magic/       Portable installed skill and standard-library helper
 tools/manage_skill.py   Explicit install/update/uninstall utility
 tests/                  Isolated executable tests and live-agent scenarios
 ```
+
+The short `SKILL.md` keeps the shared rules and a required-reading map. Detailed
+workflows live in `references/household.md`, `occasions.md`, `recipes-plans.md` and
+`meal-history.md`; `storage-cli.md` remains the structured tool contract. All hosts
+install the same files. The installer accepts the original verified five-file
+manifest when updating/uninstalling an older installation, but still refuses local
+edits, extra files, redirected paths and incomplete/unknown manifests. No schema
+or storage behavior changes accompany this instruction reorganization.
 
 This is a standalone package: the hosting agent provides the model and local
 Python provides storage. Examples and tests are synthetic. Licensed under
