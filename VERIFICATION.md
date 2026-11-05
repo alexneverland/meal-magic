@@ -8,11 +8,11 @@ and the published tag identify the released commit.
 ## Executed
 
 - Current Windows preview: Python **3.14.10** and **3.12.10** each completed
-  **155 unittest tests: 154 passed, 1 conditional MSIX probe skipped**, no failures.
+  **156 unittest tests: 155 passed, 1 conditional MSIX probe skipped**, no failures.
   Repository validation and `git diff --check` passed. The 0.6.2 ZIP has the exact
   33-file allowlist, matching source bytes, passing CRCs and a matching SHA-256
   sidecar. No new release/tag has been published for this preview.
-- Windows profile-discovery update: 35 new synthetic tests cover native/MSIX
+- Windows profile-discovery update: 36 new synthetic tests cover native/MSIX
   candidate discovery, populated-vs-empty selection, explicit conflict choice,
   duplicate physical/logical sources, receipts, WAL, schema-1 copy-only upgrades,
   staging/publication failure, concurrent subprocess startup, source drift,
@@ -22,6 +22,10 @@ and the published tag identify the released commit.
   One conditional OS probe runs only when newly created AppData files are actually
   redirected by the current process; otherwise it is explicitly skipped. Native
   volume/discovery coverage runs separately on Windows without that prerequisite.
+  The 36-test discovery suite also passed on Windows/Python 3.11 (35 passed, the
+  same conditional probe skipped). A CI-found Python 3.10 pathlib namespace-parent
+  incompatibility is covered by a regression that ignores only synthetic device
+  namespace ancestors, retaining checks on every real directory below the volume.
 - An additional extracted-package integration installs the real manager/helper
   for Codex and Antigravity under one temporary synthetic Windows user home,
   adopts a synthetic legacy profile, writes through one host and reads through

@@ -11,7 +11,7 @@ import sys
 import tempfile
 import unittest
 import uuid
-from unittest.mock import patch
+from unittest.mock import patch, PropertyMock
 
 from test_store import SCRIPT, Store, StoreError, store_module as module
 
@@ -382,6 +382,13 @@ print(json.dumps(store.handle({'action':'member-set','label':sys.argv[4]})))
             results = list(pool.map(run, range(4)))
         self.assertTrue(all(r.returncode == 0 for r in results), [(r.stdout, r.stderr) for r in results])
         self.assertEqual(len(self.call()["result"]["household"]["members"]), 5)
+
+    @unittest.skipUnless(os.name == "nt", "Windows native-volume and MSIX path adapter")
+    def test_volume_namespace_is_not_treated_as_a_filesystem_ancestor_on_python_310(self):
+        native = module.native_windows_path(self.base)
+        legacy_parents = (*native.parents, Path("\\\\?\\"))
+        with patch.object(type(native), "parents", new_callable=PropertyMock, return_value=legacy_parents):
+            self.assertEqual(module.checked_path(native), native)
 
     @unittest.skipUnless(os.name == "nt", "Windows native-volume and MSIX path adapter")
     def test_windows_native_discovery_only_visits_exact_meal_magic_paths(self):

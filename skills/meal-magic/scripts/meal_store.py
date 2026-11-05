@@ -62,7 +62,16 @@ def default_data_dir() -> Path:
 def checked_path(path: Path) -> Path:
     """Refuse links/reparse points; never follow discovery outside known locations."""
     path = Path(os.path.abspath(path.expanduser()))
+    spelling = str(path)
+    volume_root = None
+    if os.name == "nt" and spelling.casefold().startswith("\\\\?\\volume{") and "}" in spelling:
+        volume_root = spelling[:spelling.index("}") + 1].casefold() + "\\"
     for part in (path, *path.parents):
+        # Python 3.10 treats a volume-GUID anchor as ordinary path components and
+        # yields '\\\\?\\' as a parent. It is a device namespace, not a filesystem
+        # ancestor. All actual components below the API-provided volume stay checked.
+        if volume_root is not None and not str(part).casefold().startswith(volume_root):
+            continue
         try:
             info = part.lstat()
         except FileNotFoundError:
