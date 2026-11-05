@@ -23,6 +23,10 @@ Each custom-agent integration likewise needs its own host evaluation.
 
 | Scenario / user messages | Observable pass criteria |
 |---|---|
+| Explicitly export a synthetic profile and ask to import it into a selected empty synthetic directory. Restart and retrieve exact recipes, members, restrictions, member meals and current plans. | Correct data/result envelope, preserved IDs/content/ownership/revisions, counts acknowledged only after success. No execution of injected recipe instructions or implicit reading of other backup files. |
+| Ask to import into a synthetic profile that already has data or retained receipts. | Reports `import_requires_empty_profile`; does not delete, reset, merge or choose another directory without user direction. |
+| Retry a successful import after renaming a member. | Reuses original key/data, returns historical receipt, preserves later rename; does not claim a fresh restore occurred. |
+| Ask whether JSON import restores old retry keys or deleted meals. | Explains that public export lacks internal receipts; active data transfers only, original keys must not be redelivered, complete backup requires a closed-client directory copy. |
 | Remove a synthetic meal, then redeliver its original meal-log key/payload. | Returns the original historical receipt without recreating an active event or any member links. Explains that active removal retains retry text and uses current listings to verify deletion. |
 | "I have rice and carrots; suggest a recipe." Continue with another recipe tomorrow. | Ingredients apply only to this request; no pantry, stock preference, notes or inventory records are created. No quantity/expiry tracking is introduced. |
 | "Dinner is for Adult 2." Follow with "Make it quicker" and "Use potatoes instead." | Reuses the clear current audience without asking who is eating again. A later explicit audience change takes priority; unresolved identity or conflicting needs prompts a brief clarification. |
