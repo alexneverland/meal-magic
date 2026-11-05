@@ -9,18 +9,23 @@ Antigravity, and custom agents that can load instructions and execute local tool
 2026-11-05 and confirmed working by the project owner. See
 [VERIFICATION.md](VERIFICATION.md) for exactly what was tested.
 
+**[Download v0.6.1 (release ZIP and SHA-256 checksum)](https://github.com/alexneverland/meal-magic/releases/tag/v0.6.1)** · [All releases](https://github.com/alexneverland/meal-magic/releases)
+
 ## Agent testing status
 
 At the owner's explicit request, v0.6.1 was installed for actual use in **Codex**:
-explicit skill invocation, household setup, saved context reuse and a quick meal
-recipe from supplied ingredients. The owner confirmed successful use. This is a
+explicit skill invocation, household setup, saved context reuse, a quick meal
+recipe from supplied ingredients, member-specific preference handling, and
+correctly leaving suggested/planned meals out of actual history. The owner also
+reported successful removal of a temporary test preference. These are owner-reported
+conversational checks, not an independent audit of the SQLite writes. This is a
 user acceptance check, separate from synthetic development tests and not a pass
 of every acceptance scenario. Antigravity testing remains
 pending. Automated development tests use isolated synthetic profiles.
 
 | Host | Live conversational testing | Evidence so far |
 |---|---|---|
-| Codex | Basic live smoke test passed; owner confirmed | Installed v0.6.1, explicit invocation, household onboarding, stored-context reuse and ingredient-based recipe generation; automatic discovery in a fresh chat and the full scenario suite remain unverified |
+| Codex | Basic live smoke test passed; owner confirmed | Installed v0.6.1, explicit invocation, onboarding, stored-context reuse, ingredient-based recipe generation, member-scoped preference, planned-meal exclusion from actual history, and test-preference removal (owner-reported); automatic discovery and the full scenario suite remain unverified |
 | Antigravity | Planned tests by the maintainers | Storage/lifecycle tests and installation-path checks; live App/CLI/IDE conversations still pending |
 | Claude Code | Not tested conversationally by the maintainers; community reports welcome | Documented installation and tested storage/lifecycle path; no verified live-model behavior |
 | Custom agents | Each integration needs its own validation | Shared JSON CLI and explicit-directory installer tested; no blanket host compatibility claim |
@@ -75,7 +80,7 @@ encrypted data. The single-user SQLite file uses normal OS file permissions.
 
 Repository: [alexneverland/meal-magic](https://github.com/alexneverland/meal-magic).
 
-Use `main` for the latest merged source (including release preparation):
+Use `main` for the latest merged source (which can change after a release):
 
 ```text
 git clone https://github.com/alexneverland/meal-magic.git
@@ -86,8 +91,19 @@ python tools/manage_skill.py install --agent codex
 ```
 
 Choose `--agent claude-code` or `--agent antigravity` instead of `codex` as needed.
-For the fixed release snapshot, choose tag `v0.6.1` once published on the
-repository's Releases page. For an unmerged change, select its PR branch explicitly.
+For the **fixed v0.6.1 release snapshot**, check out the published tag before testing
+or installing:
+
+```text
+git clone https://github.com/alexneverland/meal-magic.git
+cd meal-magic
+git checkout v0.6.1
+python tools/check_repository.py
+python -m unittest discover -s tests -v
+python tools/manage_skill.py install --agent codex
+```
+
+Alternatively, get the versioned ZIP from the [v0.6.1 release](https://github.com/alexneverland/meal-magic/releases/tag/v0.6.1) and verify its SHA-256 checksum. For an unmerged change, select its PR branch explicitly.
 
 To inspect an unmerged change, clone its PR branch explicitly in a separate checkout.
 Back up an existing data directory before upgrading: its first successful
