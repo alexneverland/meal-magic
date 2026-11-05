@@ -529,10 +529,14 @@ class Store:
         offset = req.get("offset", 0)
         if type(offset) is not int or not 0 <= offset < 2**63:
             raise StoreError("invalid_offset")
-        where, params = ("WHERE start_on<=? AND end_on>=? ", [on, on]) if on is not None else ("", [])
-        rows = con.execute("SELECT id,title,start_on,end_on,revision,created_at,updated_at FROM plans "
-                           + where + "ORDER BY start_on DESC,updated_at DESC,id LIMIT ? OFFSET ?",
-                           (*params, limit_field(req), offset))
+        limit = limit_field(req)
+        if on is None:
+            rows = con.execute("SELECT id,title,start_on,end_on,revision,created_at,updated_at FROM plans "
+                               "ORDER BY start_on DESC,updated_at DESC,id LIMIT ? OFFSET ?", (limit, offset))
+        else:
+            rows = con.execute("SELECT id,title,start_on,end_on,revision,created_at,updated_at FROM plans "
+                               "WHERE start_on<=? AND end_on>=? "
+                               "ORDER BY start_on DESC,updated_at DESC,id LIMIT ? OFFSET ?", (on, on, limit, offset))
         return [dict(row) for row in rows]
 
     @staticmethod
