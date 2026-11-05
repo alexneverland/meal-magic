@@ -8,11 +8,11 @@ and the published tag identify the released commit.
 ## Executed
 
 - Current Windows preview: Python **3.14.10** and **3.12.10** each completed
-  **154 unittest tests: 153 passed, 1 conditional MSIX probe skipped**, no failures.
+  **155 unittest tests: 154 passed, 1 conditional MSIX probe skipped**, no failures.
   Repository validation and `git diff --check` passed. The 0.6.2 ZIP has the exact
   33-file allowlist, matching source bytes, passing CRCs and a matching SHA-256
   sidecar. No new release/tag has been published for this preview.
-- Windows profile-discovery update: 34 new synthetic tests cover native/MSIX
+- Windows profile-discovery update: 35 new synthetic tests cover native/MSIX
   candidate discovery, populated-vs-empty selection, explicit conflict choice,
   duplicate physical/logical sources, receipts, WAL, schema-1 copy-only upgrades,
   staging/publication failure, concurrent subprocess startup, source drift,

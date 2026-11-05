@@ -146,6 +146,14 @@ class SharedProfileTests(unittest.TestCase):
         self.assertEqual(len(self.call("storage-info")["result"]["legacy_candidates"]), 1)
         self.assertEqual(len(self.call()["result"]["household"]["members"]), 1)
 
+    @unittest.skipUnless(os.name == "nt", "Windows paths are case insensitive")
+    def test_agent_path_casing_changes_do_not_look_like_a_new_profile(self):
+        self.seed(self.native, "Synthetic member")
+        first = self.call()
+        self.paths = [Path(str(self.native).swapcase())]
+        second = self.call()
+        self.assertEqual(first["storage"]["profile_id"], second["storage"]["profile_id"])
+
     def test_retained_receipts_count_as_meaningful(self):
         source = self.seed(self.native)
         meal = source.handle({"action": "meal-log", "name": "Synthetic dinner", "kind": "eaten",

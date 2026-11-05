@@ -98,6 +98,11 @@ def sqlite_uri(path: Path, mode: str = "ro") -> str:
     return "file:" + quote(str(path), safe="") + "?mode=" + mode
 
 
+def profile_key(path: Path) -> str:
+    """Stable origin keys even when Windows hosts spell the same path differently."""
+    return os.path.normcase(os.path.abspath(path))
+
+
 def physical_path(path: Path) -> str | None:
     """Report the file opened by the OS, not just a potentially virtualized spelling."""
     if not path.exists():
@@ -298,7 +303,7 @@ def prepare_shared_profile(target: Path, selected_database: str | None = None) -
                 if chosen is None or Path(chosen) != Path(selected_database):
                     raise StoreError("shared_profile_already_initialized")
             for path, snapshot, meaningful, fingerprint in snapshots:
-                old = origins["sources"].get(str(path))
+                old = origins["sources"].get(profile_key(path))
                 if old is not None and old != fingerprint or old is None and meaningful:
                     raise StoreError("legacy_profile_changed_after_adoption")
             if origins["state"] == "publishing":
@@ -322,7 +327,7 @@ def prepare_shared_profile(target: Path, selected_database: str | None = None) -
                 raise StoreError("multiple_existing_profiles")
         record = {"schema": 1, "profile_id": uuid.uuid4().hex,
                   "state": "ready" if target.exists() else "publishing",
-                  "sources": {str(item[0]): item[3] for item in snapshots},
+                  "sources": {profile_key(item[0]): item[3] for item in snapshots},
                   "selected_source": str(selected[0]) if selected else None,
                   "database_identity": None}
         if target.exists():
