@@ -75,3 +75,16 @@ Record host version, model, installation scope, exact synthetic prompt, tool JSO
 requests/results, database observations, final response, and pass/fail. If a model
 was not actually run, record "not tested", not "compatible". No evaluation requires
 changing personal settings or launching subagents.
+# Windows first-use shared discovery (0.6.2)
+
+Use temporary synthetic homes/profile directories only. Update both temporary
+host installs. Seed a legacy profile in one known native/MSIX location, then start
+the other host without a data override: expect the existing members/preferences,
+no repeated onboarding, a shared profile ID and matching physical DB paths. Write
+one explicit synthetic preference through one host and read it through the other.
+Verify original legacy data remains intact. Repeat with an empty onboarding shell
+alongside a populated profile, then with two different populated profiles: the
+latter must ask once, use only the chosen discovered source and never merge/reset.
+Keep past cooked/eaten events and retry receipts separate from suggestions. After
+adoption, simulate an old helper writing its legacy source: expect a clear conflict,
+not silent divergence. A discovery error must never trigger empty-profile setup.

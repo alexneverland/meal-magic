@@ -16,6 +16,8 @@ secrets*.json
 *.sqlite-*
 MealMagic/
 .meal-magic-data/
+.meal-magic/
+.origins.json
 .pytest_cache/
 .coverage
 htmlcov/

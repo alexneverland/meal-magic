@@ -1,6 +1,8 @@
 """Exercise the actual distributable independently of the source checkout."""
 import importlib.util
+import hashlib
 import json
+import os
 from pathlib import Path
 import subprocess
 import sys
@@ -15,6 +17,46 @@ spec.loader.exec_module(builder)
 
 
 class PackageTests(unittest.TestCase):
+    @unittest.skipUnless(os.name == "nt", "Windows default-profile integration")
+    def test_two_actual_host_installs_discover_and_share_one_synthetic_profile(self):
+        with tempfile.TemporaryDirectory(prefix="meal-magic-host-sharing-") as temp:
+            base = Path(temp).resolve()
+            archive = builder.build(base / "dist")
+            with zipfile.ZipFile(archive) as bundle:
+                bundle.extractall(base / "extracted")
+            version = (ROOT / "skills/meal-magic/VERSION").read_text().strip()
+            extracted = base / "extracted" / ("meal-magic-" + version)
+            home = base / "synthetic-user"
+            local = home / "AppData" / "Local"
+            local.mkdir(parents=True)
+            environment = dict(os.environ, USERPROFILE=str(home), LOCALAPPDATA=str(local), MEAL_MAGIC_DATA_DIR="")
+            for host in ("codex", "antigravity"):
+                run = subprocess.run([sys.executable, str(extracted / "tools/manage_skill.py"),
+                                      "install", "--agent", host], env=environment,
+                                     capture_output=True, text=True, encoding="utf-8")
+                self.assertEqual(run.returncode, 0, run.stdout + run.stderr)
+            scripts = [home / ".agents/skills/meal-magic/scripts/meal_store.py",
+                       home / ".gemini/config/skills/meal-magic/scripts/meal_store.py"]
+            def invoke(script, request, data=None):
+                args = [sys.executable, str(script)]
+                if data is not None:
+                    args += ["--data-dir", str(data)]
+                run = subprocess.run(args, input=json.dumps(request), env=environment,
+                                     capture_output=True, text=True, encoding="utf-8", cwd=base)
+                self.assertEqual(run.returncode, 0, run.stdout + run.stderr)
+                return json.loads(run.stdout)
+            legacy = local / "MealMagic"
+            member = invoke(scripts[0], {"action": "member-set", "label": "Synthetic cross-host member"}, legacy)["result"]
+            original = hashlib.sha256((legacy / "meal-magic.sqlite3").read_bytes()).hexdigest()
+            first = invoke(scripts[1], {"action": "context"})
+            self.assertEqual(first["result"]["household"]["members"], [member])
+            invoke(scripts[0], {"action": "preference-set", "kind": "prefer", "target": "Synthetic rice"})
+            second = invoke(scripts[1], {"action": "context"})
+            self.assertEqual(second["result"]["preferences"][0]["target"], "Synthetic rice")
+            self.assertEqual(first["storage"]["profile_id"], second["storage"]["profile_id"])
+            self.assertEqual(second["storage"]["directory"], str(home / ".meal-magic" / "data"))
+            self.assertEqual(hashlib.sha256((legacy / "meal-magic.sqlite3").read_bytes()).hexdigest(), original)
+
     def test_review_zip_has_only_public_files_and_can_install(self):
         with tempfile.TemporaryDirectory(prefix="meal-magic-package-test-") as temp:
             base = Path(temp).resolve()

@@ -1,10 +1,53 @@
 # Verification — 2026-11-05
 
-Version: **0.6.1**, first public release. Work was performed without subagents.
+Version: **0.6.2**; release preparation authorized by the project owner.
+Work was performed without subagents.
 Review/merge state is recorded in the corresponding pull request. Release assets
 and the published tag identify the released commit.
 
 ## Executed
+
+- Current Windows release candidate: Python **3.14.10** and **3.12.10** each completed
+  **159 unittest tests: 158 passed, 1 conditional MSIX probe skipped**, no failures.
+  Repository validation and `git diff --check` passed. The 0.6.2 ZIP has the exact
+  33-file allowlist, matching source bytes, passing CRCs and a matching SHA-256
+  sidecar. The published tag/release page identifies the final release commit.
+- Windows profile-discovery update: 39 new synthetic tests cover native/MSIX
+  candidate discovery, populated-vs-empty selection, explicit conflict choice,
+  duplicate physical/logical sources, receipts, WAL, schema-1 copy-only upgrades,
+  staging/publication failure, concurrent subprocess startup, source drift,
+  malformed origins, missing/replaced shared DBs, inaccessible candidates, and
+  explicit/environment overrides. Source files and installed user skills were
+  not used as test fixtures. The new default is outside AppData.
+  One conditional OS probe runs only when newly created AppData files are actually
+  redirected by the current process; otherwise it is explicitly skipped. Native
+  volume/discovery coverage runs separately on Windows without that prerequisite.
+  The 39-test discovery suite also passed on Windows/Python 3.11 (38 passed, the
+  same conditional probe skipped). A CI-found Python 3.10 pathlib namespace-parent
+  incompatibility is covered by a regression that ignores only synthetic device
+  namespace ancestors, retaining checks on every real directory below the volume.
+- The owner-authorized pre-upgrade check found that a volume-GUID spelling still
+  opened the MSIX-private file on this Windows installation. The final resolver
+  therefore uses physical handle paths for source identity and refuses initial
+  automatic adoption when the native legacy view is hidden, requesting one explicit
+  source choice instead. It does not claim that a volume alias bypasses MSIX.
+- Owner-authorized Codex upgrade: the known household was explicitly selected,
+  adopted into the outside-AppData shared directory, and reopened with the installed
+  0.6.2 helper. The complete public export matched a pre-upgrade SQLite backup and
+  the original source file hash was unchanged. Private backups were made before
+  and after adoption. No household details or private paths are included here.
+  This is authorized actual use, separate from synthetic development tests; a
+  clean live Antigravity reinstall remains pending.
+- An additional extracted-package integration installs the real manager/helper
+  for Codex and Antigravity under one temporary synthetic Windows user home,
+  adopts a synthetic legacy profile, writes through one host and reads through
+  the other, and verifies the same shared identity and unchanged legacy source.
+  This is CLI/storage integration, not two live model sessions.
+- The current 33-file ZIP includes the new discovery tests. Earlier
+  0.6.1 evidence below remains scoped to that version; it does not certify the
+  upgraded live-agent discovery flow. Development tests used only synthetic data;
+  the owner-authorized actual Codex upgrade is recorded separately above. Clean
+  live Antigravity reinstall acceptance is pending.
 
 - Windows, Python **3.14.10**: **119/119 unittest tests passed** for the integrated import/reference update.
 - Windows, Python **3.12.10**: **119/119 unittest tests passed** for the integrated import/reference update.

@@ -5,11 +5,14 @@ remember food preferences and restrictions, keep an actual meal history, and
 save recipes and favorites. One shared Python core works with Codex, Claude Code,
 Antigravity, and custom agents that can load instructions and execute local tools.
 
-**Version 0.6.1 — First Public Release.** Basic live use in Codex was observed on
-2026-11-05 and confirmed working by the project owner. See
+**Version 0.6.2 — Windows profile discovery and shared storage.**
+Basic live use of v0.6.1 in Codex was observed on
+2026-11-05 and confirmed working by the project owner. The new discovery behavior
+has synthetic automated coverage and an owner-authorized Codex storage upgrade
+with export/backup comparison; clean live Antigravity reinstall acceptance is pending. See
 [VERIFICATION.md](VERIFICATION.md) for exactly what was tested.
 
-**[Download v0.6.1 (release ZIP and SHA-256 checksum)](https://github.com/alexneverland/meal-magic/releases/tag/v0.6.1)** · [All releases](https://github.com/alexneverland/meal-magic/releases)
+**[Download the latest published release (ZIP and SHA-256 checksum)](https://github.com/alexneverland/meal-magic/releases/latest)** · [All releases](https://github.com/alexneverland/meal-magic/releases)
 
 ## Agent testing status
 
@@ -91,19 +94,20 @@ python tools/manage_skill.py install --agent codex
 ```
 
 Choose `--agent claude-code` or `--agent antigravity` instead of `codex` as needed.
-For the **fixed v0.6.1 release snapshot**, check out the published tag before testing
+For the **fixed v0.6.2 release snapshot**, once its tag is published on the Releases
+page, check it out before testing
 or installing:
 
 ```text
 git clone https://github.com/alexneverland/meal-magic.git
 cd meal-magic
-git checkout v0.6.1
+git checkout v0.6.2
 python tools/check_repository.py
 python -m unittest discover -s tests -v
 python tools/manage_skill.py install --agent codex
 ```
 
-Alternatively, get the versioned ZIP from the [v0.6.1 release](https://github.com/alexneverland/meal-magic/releases/tag/v0.6.1) and verify its SHA-256 checksum. For an unmerged change, select its PR branch explicitly.
+Alternatively, get the versioned ZIP from [Releases](https://github.com/alexneverland/meal-magic/releases) and verify its SHA-256 checksum. For an unmerged change, select its PR branch explicitly.
 
 To inspect an unmerged change, clone its PR branch explicitly in a separate checkout.
 Back up an existing data directory before upgrading: its first successful
@@ -128,7 +132,7 @@ To build a local review archive (without publishing anything):
 python tools/build_package.py
 ```
 
-This writes `dist/meal-magic-0.6.1.zip` and a SHA-256 sidecar. Packaging uses an
+This writes `dist/meal-magic-0.6.2.zip` and a SHA-256 sidecar. Packaging uses an
 explicit source-file allowlist, so databases, caches, personal settings, and
 untracked files cannot enter the archive through directory scanning.
 
@@ -253,12 +257,68 @@ By default, all local agents running under the same OS user share one household 
 
 | OS | User data directory |
 |---|---|
-| Windows | `%LOCALAPPDATA%\MealMagic` |
+| Windows (0.6.2+) | `%USERPROFILE%\.meal-magic\data` |
 | macOS | `~/Library/Application Support/MealMagic` |
 | Linux | `$XDG_DATA_HOME/meal-magic`, or `~/.local/share/meal-magic` |
 
 The database is `meal-magic.sqlite3`. No personal histories, family records, or
 real saved recipes are bundled. No external application is required or imported.
+
+### Automatic Windows profile discovery
+
+Windows MSIX applications can silently redirect AppData to a package-private
+copy even when environment variables and displayed paths match. Version 0.6.2
+uses a per-user directory outside AppData, shared by every updated local host.
+Before creating its database, the helper checks the old `LocalAppData/MealMagic`
+location and exact `LocalCache/Local/MealMagic` locations beneath the user's MSIX
+packages. It checks the actual OS-opened paths; volume aliases alone are not proof
+that AppData is unvirtualized. Normal filesystem permissions still apply; this does not disable
+agent sandboxing or scan unrelated application data.
+
+If one distinct populated profile exists, the helper automatically adopts a
+consistent complete SQLite snapshot, including retry receipts and committed WAL
+records. A newly initialized empty shell does not take priority over saved data.
+Locale choices, completed/skipped onboarding and retained receipts count as saved
+state. The selected copy is validated/upgraded before atomic publication; original
+databases are preserved. A lock serializes startup across agents. No user-managed
+copy or JSON import is needed. Database schema remains 7.
+
+If different populated profiles exist, the helper stops with
+`multiple_existing_profiles`. The agent reads `storage-info`, explains the candidate
+counts and asks once which profile to use. An explicit `profile-select` chooses a
+discovered source only before shared initialization; it never merges or replaces
+an existing shared database. Unknown/corrupt/inaccessible profiles stop discovery
+instead of being treated as absent. Existing `--data-dir` and `MEAL_MAGIC_DATA_DIR`
+overrides remain deliberate isolated profiles and bypass automatic discovery.
+
+An old MSIX shadow can hide a native legacy file even through a volume alias. If
+that makes initial discovery incomplete, `profile_discovery_incomplete_choose_source`
+requests one explicit choice from the visible `storage-info` candidates instead
+of guessing. Choosing the known household needs no manual copies; every original
+is retained. Alternatively, an agent with the normal native filesystem view can
+perform the same automatic first use. Fresh installations create the common
+outside-AppData profile directly after discovery. Once shared initialization is
+complete, both updated hosts use that common profile. Stored source paths are
+physical handle paths, preventing an alias from referring to a different profile
+when another host opens it.
+
+Update the skill in **every host** before using the shared default. Older helpers
+keep their old paths. If an old helper changes a source after adoption, the new
+helper refuses with `legacy_profile_changed_after_adoption`; it never silently
+merges divergent writes. A missing previously initialized shared database is also
+reported rather than recreated from stale sources. Recovery requires a deliberate
+choice, not automatic deletion or reset. Removing sources after a verified backup
+is an owner operation, not part of adoption.
+
+`storage-info` is read-only and returns the requested/physical database paths,
+presence, a shared profile ID once initialized, and discovered candidate counts.
+Successful `context` responses include this information in a top-level `storage`
+field; compare physical paths/profile IDs rather than assuming equal path strings
+mean the same file. `.origins.json` records identity and source hashes locally;
+include it with whole-directory backups and keep it private.
+
+The MSIX behavior is documented by [Microsoft](https://learn.microsoft.com/en-us/windows/msix/desktop/desktop-to-uwp-behind-the-scenes)
+and reported for [Codex desktop](https://github.com/openai/codex/issues/41665).
 
 For a separate profile, set an absolute `MEAL_MAGIC_DATA_DIR` **in the environment
 that runs the agent**, or pass `--data-dir` on each CLI call. Example for a
@@ -278,7 +338,11 @@ multi-user access controls; anyone with access to the profile can read its recor
 To make a complete backup, close all agents using the store and copy the entire
 data directory to a private backup location. To restore, close those agents and
 copy that saved directory back to the same data path (keep the current directory
-as a backup first). Do not merge SQLite files. The `export` action returns a JSON
+as a backup first). For the guarded Windows shared default in 0.6.2+, restore to
+a separate chosen directory and select it explicitly with `MEAL_MAGIC_DATA_DIR`
+or `--data-dir`: a copied database has a different OS file identity and is not
+silently accepted as the old live database. Preserve the existing shared directory
+and its metadata. Do not merge SQLite files. The `export` action returns a JSON
 snapshot for inspection/portability. `import` restores its active public data only
 into an empty profile; it does not restore source internal retry receipts. See
 [JSON transfer](#json-transfer-into-an-empty-profile).

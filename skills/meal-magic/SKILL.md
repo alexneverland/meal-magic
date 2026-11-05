@@ -18,6 +18,11 @@ before the first storage call. Use Python 3.10+ and an absolute script path. Run
 preferences. Context returns the household, locale, declared observances, onboarding state, every scoped
 preference, and the latest 20 actual events;
 request up to 100 events when useful. Never treat a failed read as an empty profile.
+Windows first use discovers and adopts an existing Meal Magic profile automatically.
+On a profile conflict or incomplete virtualized view, read `storage-info`, explain the candidates and ask once which
+to use; call `profile-select` only with that explicit choice. Never reset, overwrite,
+switch directories or start onboarding to bypass a discovery failure. Update every
+host's skill before sharing the new default; old helpers do not follow its location.
 
 Respond in the user's language. Interpret intent, dates, ingredients, synonyms,
 and dietary meaning with the model. Do not implement phrase lists or regex intent

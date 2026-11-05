@@ -25,6 +25,15 @@ The helper does not make network calls, hold API keys or run a server. The hosti
 agent may send data it reads to its model provider. That agent's tools, account,
 privacy terms and sandbox remain separate from this package.
 
+Windows 0.6.2+ shared discovery inspects only exact legacy Meal Magic locations,
+including MSIX-private copies, with normal OS permissions. Different populated
+profiles require an explicit choice; no profile is merged, reset or overwritten.
+Adoption preserves originals and full internal receipts. Its `.origins.json`
+identity/source-hash metadata and `storage-info` output contain local paths and
+record counts; keep them private. Legacy source changes, missing/replaced shared
+databases and malformed metadata fail closed. Update every host before sharing
+the new default; old installations can otherwise continue writing legacy data.
+
 ## Report a vulnerability
 
 Use GitHub's private vulnerability reporting when **Report a vulnerability** is
@@ -35,7 +44,7 @@ description and request a private reporting channel before sending sensitive det
 There is no dedicated security email or response-time commitment at present.
 
 Provide the affected version, OS/Python version, impact, and the smallest synthetic
-reproduction. The current public release is **v0.6.1**; security reports are accepted
+reproduction. The current release is **v0.6.2**; security reports are accepted
 for that release and the current `main` development source. Fixes are delivered
 through `main` and a subsequent release as appropriate; no long-term maintenance
 or separate backport policy is promised. Use the reporting channels above for
