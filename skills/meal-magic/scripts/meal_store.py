@@ -22,6 +22,25 @@ VERSION = "0.6.2"
 KINDS = ("prefer", "avoid", "forbid", "allergy", "diet")
 AGE_GROUPS = ("unspecified", "infant", "young_child", "child", "teen", "adult", "older_adult")
 ALLERGY_STATUSES = ("unknown", "none_reported", "reported")
+PROFILE_PRESENCE_QUERIES = {
+    "preferences": "SELECT 1 FROM preferences LIMIT 1",
+    "recipes": "SELECT 1 FROM recipes LIMIT 1",
+    "meals": "SELECT 1 FROM meals LIMIT 1",
+    "members": "SELECT 1 FROM members LIMIT 1",
+    "observances": "SELECT 1 FROM observances LIMIT 1",
+    "plans": "SELECT 1 FROM plans LIMIT 1",
+    "plan_requests": "SELECT 1 FROM plan_requests LIMIT 1",
+    "meal_members": "SELECT 1 FROM meal_members LIMIT 1",
+    "meal_requests": "SELECT 1 FROM meal_requests LIMIT 1",
+    "import_requests": "SELECT 1 FROM import_requests LIMIT 1",
+}
+PROFILE_COUNT_QUERIES = {
+    "members": "SELECT count(*) FROM members",
+    "preferences": "SELECT count(*) FROM preferences",
+    "recipes": "SELECT count(*) FROM recipes",
+    "meals": "SELECT count(*) FROM meals",
+    "plans": "SELECT count(*) FROM plans",
+}
 
 
 class StoreError(Exception):
@@ -154,7 +173,7 @@ def profile_snapshot(path: Path) -> tuple[sqlite3.Connection, bool, str]:
             raise StoreError("invalid_legacy_profile")
         if memory.execute("PRAGMA foreign_key_check").fetchone():
             raise StoreError("invalid_legacy_profile")
-        meaningful = any(memory.execute('SELECT 1 FROM "' + table + '" LIMIT 1').fetchone()
+        meaningful = any(memory.execute(PROFILE_PRESENCE_QUERIES[table]).fetchone()
                          for table in tables - {"onboarding", "locale"})
         if "onboarding" in tables:
             rows = memory.execute("SELECT status FROM onboarding WHERE singleton=1").fetchall()
@@ -589,8 +608,8 @@ class Store:
             for path in discover_profiles(self.path):
                 snapshot, meaningful, fingerprint = profile_snapshot(path)
                 tables = {r[0] for r in snapshot.execute("SELECT name FROM sqlite_master WHERE type='table'")}
-                counts = {table: snapshot.execute('SELECT count(*) FROM "' + table + '"').fetchone()[0]
-                          for table in ("members", "preferences", "recipes", "meals", "plans") if table in tables}
+                counts = {table: snapshot.execute(query).fetchone()[0]
+                          for table, query in PROFILE_COUNT_QUERIES.items() if table in tables}
                 snapshot.close()
                 result["legacy_candidates"].append({"database": str(path),
                                                      "has_saved_state": meaningful, "counts": counts})
