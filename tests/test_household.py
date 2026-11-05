@@ -148,10 +148,10 @@ class HouseholdTests(unittest.TestCase):
         self.assertTrue(recipe["favorite"])
         self.assertEqual(ctx["recent_meals"][0]["id"], "meal-old")
         exported = self.call("export")
-        self.assertEqual(exported["schema_version"], 6)
+        self.assertEqual(exported["schema_version"], 7)
         self.assertEqual(len(exported["preferences"]), 1)
         with closing(sqlite3.connect(self.store.path)) as con:
-            self.assertEqual(con.execute("PRAGMA user_version").fetchone()[0], 6)
+            self.assertEqual(con.execute("PRAGMA user_version").fetchone()[0], 7)
 
     def test_failed_upgrade_rolls_back_entire_schema_change(self):
         self.seed_legacy()

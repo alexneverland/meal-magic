@@ -1,23 +1,31 @@
 # Verification — 2026-11-05
 
-Version: **0.5.1**, source preview proposed through pull requests. Work was
+Version: **0.6.1**, source preview proposed through pull requests. Work was
 performed without subagents. No tagged release or agent-directory installation
 is implied by the source repository. Review/merge state is recorded in the
 corresponding pull request, not inferred from this report.
 
 ## Executed
 
-- Windows, Python **3.14.10**: **105/105 unittest tests passed** for the instruction/reference reorganization.
-- Windows, Python **3.12.10**: **105/105 unittest tests passed** for the instruction/reference reorganization.
-- Five new installer tests cover the workflow-reference files in installations,
-  upgrade/uninstall from the original five-file manifest, protection of modified
-  and unknown legacy files, and refusal of partial reference manifests. The package
-  test verifies the extracted installed reference bytes match the source package.
-  The original workflow sections were compared verbatim after relocation, allowing
-  only relative-link adjustments. Main SKILL.md shrank from 3,054 to 793 words
-  (317 to 89 lines); the change is instruction organization, not schema behavior.
+- Windows, Python **3.14.10**: **119/119 unittest tests passed** for the integrated import/reference update.
+- Windows, Python **3.12.10**: **119/119 unittest tests passed** for the integrated import/reference update.
+- Five new installer tests verify workflow reference installation, legacy manifest
+  update/uninstall, protection of local edits/unknown files and refusal of partial
+  manifests. The package verifies installed reference bytes. Workflow relocation
+  preserves the original detailed instructions; live reference-routing remains untested.
+- Fourteen new import tests verify complete cross-domain round trips preserving
+  public IDs, exact Unicode/recipe content, favorites, member ownership, timestamps
+  and plan revisions; schema-6 compatibility; type/date/field/reference validation;
+  duplicate labels/IDs; nonfinite values, invalid Unicode and size/record limits;
+  refusal of records, metadata or receipts in destination profiles; rollback on
+  last-write failure and failed schema-6 migration; and concurrent subprocess
+  retries that do not overwrite later edits. Imported internal keys are new and
+  ordinary plan updates/event removal continue working. Text containing malicious
+  instructions remains exact recipe data; no model execution is implied.
+  The documented 10,000-record boundary is exercised by importing and exporting
+  10,000 synthetic preferences without truncation.
 - Prior v0.5 member-history/review baseline: **100/100 tests passed** on Windows
-  with Python 3.12.10 and 3.14.10. Those tests remain in the current suite.
+  with Python 3.12.10/3.14.10. The current suite includes those tests.
 - Nineteen new synthetic membership tests cover separate dishes, independent
   cooked/eaten membership, unspecified attendance, per-member filtering before
   limits, reordered/conflicting retries, malformed/unknown IDs, the 100-member
@@ -30,7 +38,7 @@ corresponding pull request, not inferred from this report.
   Review regressions verify that deleted events never return on old retries,
   including after member removal; schema-5 previews backfill durable receipts;
   denied backfill/receipt writes roll back; a 120-event export loads membership in
-  one query rather than one per event. Final schema version is 6. Receipts retain
+  one query rather than one per event. This feature introduced schema 6. Receipts retain
   original meal text/member IDs after active removal and are excluded from export.
 - Prior v0.4 planning/review baseline: **81/81 tests passed** on Windows with
   Python 3.12.10 and 3.14.10. The current suite includes those tests.
@@ -95,10 +103,13 @@ corresponding pull request, not inferred from this report.
   The member-history update includes the new test module in the ZIP, records a
   member-scoped eaten event through the extracted installed helper, updates that
   temporary installation, and retrieves the same event by member after restart.
+  The JSON import update exports that extracted-package synthetic profile, restores
+  it into a different empty temporary directory with the installed helper, and
+  verifies the complete export matches after another subprocess restart.
 - Repository validation checks required public files, local Markdown links, runtime
   imports against the standard library, and forbidden tracked paths in Git checkouts.
   It is a hygiene check, not an exhaustive security or secret-content audit.
-- The 0.5.1 source ZIP was built and inspected against the exact 31-file public
+- The 0.6.1 source ZIP was built and inspected against the exact 32-file public
   allowlist, with passing CRC verification and a matching SHA-256 sidecar. Generated
   archives and caches are not committed. `git diff --check` passed.
 - GitHub CI is configured for Windows/Linux/macOS with Python 3.10/3.14 and a stable
@@ -143,10 +154,9 @@ Audience continuity, separate dishes, temporary ingredients and correct assignme
 from actual conversational reports have additional manual acceptance scenarios;
 their presence is not evidence that a host model passed them. There is no pantry
 storage, quantity/expiry tracking, medical inference or automatic meal attendance.
-No live-agent reference-routing evaluation was performed for the instruction
-reorganization. Source-section preservation and installer/link/package tests do
-not prove unchanged host-model behavior; fresh-session comparison scenarios remain
-for the owner in Codex and Antigravity.
+No live-agent JSON import conversation was executed. Added manual scenarios cover
+authorized source/destination selection, refusal to overwrite, receipt replay and
+the distinction between active-data transfer and whole-directory backup.
 
 The local baseline above used Windows/Python 3.12 and 3.14. Other local Python
 versions and macOS/Linux were not executed locally. The code targets Python
@@ -171,3 +181,7 @@ Official pages were opened and checked on 2026-11-05:
 
 The package is standalone. No external application's code, configuration,
 database or personal records is required, imported or bundled.
+
+No live-agent reference-routing evaluation was performed. Source preservation,
+link/installer/package checks do not prove unchanged model behavior; fresh-session
+comparison scenarios remain for the owner in Codex and Antigravity.

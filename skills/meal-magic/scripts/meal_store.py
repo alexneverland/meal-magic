@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -13,7 +14,7 @@ import uuid
 from datetime import date, datetime, timezone
 from typing import Any
 
-VERSION = "0.5.1"
+VERSION = "0.6.1"
 KINDS = ("prefer", "avoid", "forbid", "allergy", "diet")
 AGE_GROUPS = ("unspecified", "infant", "young_child", "child", "teen", "adult", "older_adult")
 ALLERGY_STATUSES = ("unknown", "none_reported", "reported")
@@ -76,6 +77,147 @@ def date_field(req: dict, key: str) -> date:
     except ValueError:
         raise StoreError(f"invalid_{key}") from None
     return parsed
+
+
+def validate_snapshot(data: Any) -> dict:
+    """Validate a public export as inert data without repairing or inferring facts."""
+    def fields(value, names):
+        if not isinstance(value, dict) or set(value) != set(names.split()):
+            raise StoreError("invalid_import_fields")
+
+    def string(value, maximum=2000, empty=False):
+        if not isinstance(value, str) or len(value) > maximum or (not empty and not value.strip()):
+            raise StoreError("invalid_import_string")
+
+    def stamp(value):
+        string(value, 100)
+        try:
+            parsed = datetime.fromisoformat(value)
+            if parsed.tzinfo is None:
+                raise ValueError()
+        except ValueError:
+            raise StoreError("invalid_import_timestamp") from None
+
+    def choice(value, allowed):
+        if not isinstance(value, str) or value not in allowed:
+            raise StoreError("invalid_import_enum")
+
+    def reference(value, ids):
+        if value is not None and (not isinstance(value, str) or value not in ids):
+            raise StoreError("invalid_import_reference")
+
+    fields(data, "schema_version household preferences recipes meals plans")
+    if type(data["schema_version"]) is not int or data["schema_version"] not in (6, 7):
+        raise StoreError("unsupported_import_schema")
+    household = data["household"]
+    fields(household, "onboarding members locale observances")
+    collections = {key: data[key] for key in ("preferences", "recipes", "meals", "plans")}
+    collections.update({key: household[key] for key in ("members", "observances")})
+    ids = {}
+    shapes = {
+        "members": "id label age_group allergy_status notes updated_at",
+        "observances": "id label kind schedule rules calendar strictness active member_id notes updated_at",
+        "preferences": "id kind target notes updated_at member_id",
+        "recipes": "id name content tags source created_at favorite",
+        "meals": "id kind name occurred_on recipe_id created_at member_ids",
+        "plans": "id title start_on end_on revision created_at updated_at meals shopping_list notes",
+    }
+    for domain, records in collections.items():
+        if not isinstance(records, list) or len(records) > 10000:
+            raise StoreError("invalid_import_records")
+        ids[domain] = set()
+        for record in records:
+            fields(record, shapes[domain])
+            string(record["id"], 200)
+            if record["id"] != record["id"].strip():
+                raise StoreError("invalid_import_id")
+            if record["id"] in ids[domain]:
+                raise StoreError("invalid_import_duplicate_id")
+            ids[domain].add(record["id"])
+            for key in ("created_at", "updated_at"):
+                if key in record:
+                    stamp(record[key])
+    labels = set()
+    for member in collections["members"]:
+        string(member["label"], 200)
+        if member["label"] in labels:
+            raise StoreError("invalid_import_duplicate_label")
+        labels.add(member["label"])
+        choice(member["age_group"], AGE_GROUPS)
+        choice(member["allergy_status"], ALLERGY_STATUSES)
+        string(member["notes"], 4000, empty=True)
+    members = {member["id"]: member for member in collections["members"]}
+    for pref in collections["preferences"]:
+        choice(pref["kind"], KINDS)
+        string(pref["target"])
+        string(pref["notes"], 4000, empty=True)
+        reference(pref["member_id"], ids["members"])
+        if pref["kind"] == "allergy" and pref["member_id"] is not None:
+            if members[pref["member_id"]]["allergy_status"] != "reported":
+                raise StoreError("invalid_import_allergy_status")
+    for practice in collections["observances"]:
+        string(practice["label"], 200)
+        choice(practice["kind"], ("holiday", "fasting", "tradition"))
+        choice(practice["strictness"], ("unspecified", "strict", "flexible"))
+        if type(practice["active"]) is not bool:
+            raise StoreError("invalid_import_boolean")
+        reference(practice["member_id"], ids["members"])
+        for key, maximum, empty in (("schedule", 4000, False), ("rules", 8000, False),
+                                    ("calendar", 1000, True), ("notes", 4000, True)):
+            string(practice[key], maximum, empty)
+    fields(household["onboarding"], "status updated_at")
+    choice(household["onboarding"]["status"], ("pending", "in_progress", "completed", "skipped"))
+    stamp(household["onboarding"]["updated_at"])
+    locale = household["locale"]
+    fields(locale, "country region timezone holiday_mode updated_at")
+    for key in ("country", "region", "timezone"):
+        if locale[key] is not None:
+            string(locale[key], 200)
+    choice(locale["holiday_mode"], ("unknown", "suggest", "off"))
+    stamp(locale["updated_at"])
+    for recipe in collections["recipes"]:
+        string(recipe["name"])
+        string(recipe["content"], 100000)
+        string(recipe["source"])
+        if type(recipe["favorite"]) is not bool:
+            raise StoreError("invalid_import_boolean")
+        if not isinstance(recipe["tags"], list) or len(recipe["tags"]) > 50:
+            raise StoreError("invalid_import_tags")
+        for tag in recipe["tags"]:
+            string(tag, 100)
+    for meal in collections["meals"]:
+        string(meal["name"])
+        choice(meal["kind"], ("cooked", "eaten"))
+        try:
+            date_field(meal, "occurred_on")
+        except StoreError:
+            raise StoreError("invalid_import_date") from None
+        reference(meal["recipe_id"], ids["recipes"])
+        attendees = meal["member_ids"]
+        if not isinstance(attendees, list) or len(attendees) > 100:
+            raise StoreError("invalid_import_members")
+        seen = set()
+        for member in attendees:
+            if not isinstance(member, str) or member not in ids["members"] or member in seen:
+                raise StoreError("invalid_import_members")
+            seen.add(member)
+    for plan in collections["plans"]:
+        string(plan["title"])
+        if type(plan["revision"]) is not int or not 1 <= plan["revision"] < 2**63:
+            raise StoreError("invalid_import_revision")
+        try:
+            # Reuse existing bounded plan validation; do not change imported text.
+            Store._plan_document(plan)
+            for meal in plan["meals"]:
+                fields(meal, "on slot name servings details")
+            for item in plan["shopping_list"]:
+                fields(item, "item quantity notes")
+            dates = [meal["on"] for meal in plan["meals"]]
+            if plan["start_on"] != min(dates) or plan["end_on"] != max(dates):
+                raise StoreError("invalid_plan_span")
+        except StoreError:
+            raise StoreError("invalid_import_plan") from None
+    return data
 
 
 SCHEMA = (
@@ -160,7 +302,12 @@ class Store:
                     payload = {key: meal[key] for key in ("kind", "name", "occurred_on", "recipe_id", "member_ids")}
                     self._record_meal_receipt(con, row["request_key"], payload, meal)
                 con.execute("PRAGMA user_version = 6")
-            elif version != 6:
+                version = 6
+            if version == 6:
+                con.execute("CREATE TABLE import_requests (request_key TEXT PRIMARY KEY, "
+                            "snapshot_hash TEXT NOT NULL, response TEXT NOT NULL)")
+                con.execute("PRAGMA user_version = 7")
+            elif version != 7:
                 raise StoreError("unsupported_schema_version")
             # Also add this index to schema-4 previews created before pagination.
             con.execute("CREATE INDEX IF NOT EXISTS plans_listing ON plans(start_on DESC,updated_at DESC,id)")
@@ -195,6 +342,7 @@ class Store:
             "plan-list": (self._plan_list, {"on", "limit", "offset"}),
             "plan-remove": (self._plan_remove, {"id", "expected_revision", "request_key"}),
             "export": (self._export, set()),
+            "import": (self._import, {"data", "request_key"}),
         }
         if not isinstance(req, dict) or not isinstance(req.get("action"), str):
             raise StoreError("request_must_have_action")
@@ -720,11 +868,78 @@ class Store:
         return self._record_plan_receipt(con, key, req, result)
 
     def _export(self, con: sqlite3.Connection, req: dict) -> dict:
-        return {"schema_version": 6, "household": self._household(con),
+        return {"schema_version": 7, "household": self._household(con),
                 "plans": [self._plan(row) for row in con.execute("SELECT * FROM plans ORDER BY id")],
                 "preferences": [dict(r) for r in con.execute("SELECT * FROM preferences ORDER BY id")],
                 "recipes": [self._recipe(r) for r in con.execute("SELECT * FROM recipes ORDER BY id")],
                 "meals": self._meals(con, list(con.execute("SELECT * FROM meals ORDER BY id")), all_members=True)}
+
+    def _import(self, con: sqlite3.Connection, req: dict) -> dict:
+        key = text_field(req, "request_key", limit=200)
+        data = req.get("data")
+        try:
+            encoded = json.dumps(data, sort_keys=True, ensure_ascii=False, allow_nan=False).encode("utf-8")
+        except (TypeError, ValueError, UnicodeError, RecursionError):
+            raise StoreError("invalid_import_json") from None
+        if len(encoded) > 20 * 1024 * 1024:
+            raise StoreError("invalid_import_size")
+        digest = hashlib.sha256(encoded).hexdigest()
+        previous = con.execute("SELECT * FROM import_requests WHERE request_key=?", (key,)).fetchone()
+        if previous:
+            if previous["snapshot_hash"] != digest:
+                raise StoreError("request_key_conflict")
+            return json.loads(previous["response"])
+        data = validate_snapshot(data)
+        household = self._household(con)
+        occupied = con.execute(
+            "SELECT 1 FROM members UNION ALL SELECT 1 FROM preferences UNION ALL SELECT 1 FROM observances "
+            "UNION ALL SELECT 1 FROM recipes UNION ALL SELECT 1 FROM meals UNION ALL SELECT 1 FROM plans "
+            "UNION ALL SELECT 1 FROM plan_requests UNION ALL SELECT 1 FROM meal_requests "
+            "UNION ALL SELECT 1 FROM import_requests LIMIT 1").fetchone()
+        if (occupied or household["onboarding"]["status"] != "pending" or
+                any(household["locale"][field] is not None for field in ("country", "region", "timezone")) or
+                household["locale"]["holiday_mode"] != "unknown"):
+            raise StoreError("import_requires_empty_profile")
+        incoming = data["household"]
+        for member in incoming["members"]:
+            con.execute("INSERT INTO members VALUES (?,?,?,?,?,?)",
+                        tuple(member[k] for k in ("id", "label", "age_group", "allergy_status", "notes", "updated_at")))
+        for pref in data["preferences"]:
+            con.execute("INSERT INTO preferences (id,kind,target,notes,updated_at,member_id) VALUES (?,?,?,?,?,?)",
+                        tuple(pref[k] for k in ("id", "kind", "target", "notes", "updated_at", "member_id")))
+        for practice in incoming["observances"]:
+            con.execute("INSERT INTO observances VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+                        tuple(practice[k] for k in ("id", "label", "kind", "schedule", "rules", "calendar",
+                                                   "strictness", "active", "member_id", "notes", "updated_at")))
+        for recipe in data["recipes"]:
+            payload = {k: recipe[k] for k in ("name", "content", "tags", "source")}
+            con.execute("INSERT INTO recipes VALUES (?,?,?,?,?,?,?,?,?)",
+                        (recipe["id"], recipe["name"], recipe["content"], json.dumps(recipe["tags"], ensure_ascii=False),
+                         recipe["source"], recipe["created_at"], recipe["favorite"], uuid.uuid4().hex,
+                         json.dumps(payload, ensure_ascii=False)))
+        for meal in data["meals"]:
+            payload = {k: meal[k] for k in ("kind", "name", "occurred_on", "recipe_id", "member_ids")}
+            payload["member_ids"] = sorted(payload["member_ids"])
+            internal_key = uuid.uuid4().hex
+            con.execute("INSERT INTO meals VALUES (?,?,?,?,?,?,?,?)",
+                        (meal["id"], meal["kind"], meal["name"], meal["occurred_on"], meal["recipe_id"],
+                         meal["created_at"], internal_key, json.dumps(payload, ensure_ascii=False)))
+            con.executemany("INSERT INTO meal_members VALUES (?,?)", [(meal["id"], m) for m in meal["member_ids"]])
+            self._record_meal_receipt(con, internal_key, payload, {**meal, "member_ids": payload["member_ids"]})
+        for plan in data["plans"]:
+            document = {k: plan[k] for k in ("meals", "shopping_list", "notes")}
+            con.execute("INSERT INTO plans VALUES (?,?,?,?,?,?,?,?)",
+                        (plan["id"], plan["title"], plan["start_on"], plan["end_on"], json.dumps(document, ensure_ascii=False),
+                         plan["revision"], plan["created_at"], plan["updated_at"]))
+        con.execute("UPDATE onboarding SET status=?,updated_at=? WHERE singleton=1",
+                    (incoming["onboarding"]["status"], incoming["onboarding"]["updated_at"]))
+        loc = incoming["locale"]
+        con.execute("UPDATE locale SET country=?,region=?,timezone=?,holiday_mode=?,updated_at=? WHERE singleton=1",
+                    tuple(loc[k] for k in ("country", "region", "timezone", "holiday_mode", "updated_at")))
+        result = {"imported": True, "counts": {k: len(incoming[k] if k in incoming else data[k])
+                                              for k in ("members", "preferences", "observances", "recipes", "meals", "plans")}}
+        con.execute("INSERT INTO import_requests VALUES (?,?,?)", (key, digest, json.dumps(result)))
+        return result
 
 
 def main() -> int:

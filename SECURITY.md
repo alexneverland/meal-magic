@@ -13,6 +13,13 @@ history. Removing a meal removes that event's links, not household member record
 Durable meal-log receipts also retain original request/response text and member
 IDs after event or member removal, preventing redelivery from recreating events.
 Meal removal is not complete erasure; JSON export omits these internal receipts.
+JSON import accepts schema-6/7 exports only into an empty profile, with bounded
+structural validation and atomic writes. It never executes imported recipe text,
+merges into another household, clears existing data or restores hidden source
+receipts. Original source request keys are not recoverable from public exports.
+Import receipts store keys, snapshot hashes and result counts; export/request files
+remain private and must not enter logs, commits or source archives. A full closed-
+client data-directory copy is needed to preserve original internal retry history.
 
 The helper does not make network calls, hold API keys or run a server. The hosting
 agent may send data it reads to its model provider. That agent's tools, account,

@@ -5,7 +5,7 @@ remember food preferences and restrictions, keep an actual meal history, and
 save recipes and favorites. One shared Python core works with Codex, Claude Code,
 Antigravity, and custom agents that can load instructions and execute local tools.
 
-**Version 0.5.1 — source preview, no tagged release yet.** Agent installation layouts
+**Version 0.6.1 — source preview, no tagged release yet.** Agent installation layouts
 are documented; live model-session compatibility is not yet certified. See
 [VERIFICATION.md](VERIFICATION.md) for exactly what was tested.
 
@@ -88,7 +88,7 @@ on `main` is not a tagged release or a claim of completed conversational testing
 
 To inspect an unmerged change, clone its PR branch explicitly in a separate checkout.
 Back up an existing data directory before using this preview: its first successful
-storage request upgrades the database to schema 6.
+storage request upgrades the database to schema 7.
 
 Alternatively, download a source ZIP using GitHub's **Code → Download ZIP** on
 the chosen branch, extract it, and open a terminal beside this README and `tools/`.
@@ -109,7 +109,7 @@ To build a local review archive (without publishing anything):
 python tools/build_package.py
 ```
 
-This writes `dist/meal-magic-0.5.1.zip` and a SHA-256 sidecar. Packaging uses an
+This writes `dist/meal-magic-0.6.1.zip` and a SHA-256 sidecar. Packaging uses an
 explicit source-file allowlist, so databases, caches, personal settings, and
 untracked files cannot enter the archive through directory scanning.
 
@@ -260,7 +260,65 @@ To make a complete backup, close all agents using the store and copy the entire
 data directory to a private backup location. To restore, close those agents and
 copy that saved directory back to the same data path (keep the current directory
 as a backup first). Do not merge SQLite files. The `export` action returns a JSON
-snapshot for inspection/portability; there is no JSON import command.
+snapshot for inspection/portability. `import` restores its active public data only
+into an empty profile; it does not restore source internal retry receipts. See
+[JSON transfer](#json-transfer-into-an-empty-profile).
+
+## JSON transfer into an empty profile
+
+Use `import` to move active household data from a Meal Magic JSON export to a
+new profile. This first version accepts schema-6/7 exports and refuses any target
+with records, retained retry receipts, changed locale or non-pending onboarding.
+It never overwrites or merges an existing household. An initialized untouched
+profile is allowed; no delete/reset/force option is provided.
+
+The import preserves public record IDs and links, member-scoped restrictions,
+recipes and favorites, exact content/timestamps, actual meal membership and current
+plan revisions. All validation/writes run atomically. Malformed or conflicting
+data fails without partial restoration or silent repair. Imported text is data,
+never instructions. Limits are 10,000 records per domain and 20 MiB canonical
+UTF-8 JSON, with existing per-field bounds. See the [CLI contract](skills/meal-magic/references/storage-cli.md#json-import-into-an-empty-profile).
+
+The request is a JSON object with `action: "import"`, a fresh `request_key`, and
+`data` set to the successful export response's **result object**, not the full
+response envelope. Pass it through stdin or a private UTF-8 `--request-file` and
+explicitly target your chosen empty `--data-dir`. Never put backup files in Git
+or interpolate their contents into shell commands. The host must read only the
+specific export and destination you authorize.
+
+Example preparation in Python, with paths explicitly selected by the user:
+
+```python
+import json
+from pathlib import Path
+import subprocess
+import sys
+
+export_file = Path("/private/backup/export-response.json")
+helper = Path("/absolute/path/to/meal-magic/scripts/meal_store.py")
+destination = Path("/private/new-empty-profile")
+response = json.loads(export_file.read_text(encoding="utf-8-sig"))
+if response.get("ok") is not True:
+    raise ValueError("Source export did not succeed")
+request = {"action": "import", "request_key": "restore-transfer-001", "data": response["result"]}
+run = subprocess.run([sys.executable, str(helper), "--data-dir", str(destination)],
+                     input=json.dumps(request, ensure_ascii=False), encoding="utf-8",
+                     capture_output=True, check=False)
+result = json.loads(run.stdout)
+if run.returncode or not result.get("ok"):
+    raise RuntimeError(result.get("error", "Import failed"))
+print(result["result"])  # Success/counts only, not the private snapshot.
+```
+
+For uncertain retries, use the identical key/data: the original success is returned
+without applying the snapshot again or undoing later edits. Changing the snapshot
+with the same key conflicts. A new key against an imported profile is refused.
+
+JSON export omits internal request keys and historical retry receipts. Import
+creates new internal keys for active recipes/meals; deleted events, earlier plan
+versions and original source retry keys cannot be recovered. Do not redeliver old
+source requests to the destination. For a complete recovery including retry
+history, use the closed-client whole-directory backup described above.
 
 ## Update
 
@@ -301,12 +359,13 @@ overwrite option. Prefer running the helper as a CLI. On Windows, reparse points
 are checked without following them on every supported Python version, including
 3.10/3.11; project paths retain their original spelling until this check runs.
 
-The manager never opens the personal database. v0.5 uses schema version 6. On the
-first successful storage request, the helper upgrades schema 1, 2, 3, 4 or 5 transactionally.
+The manager never opens the personal database. v0.6 uses schema version 7. On the
+first successful storage request, the helper upgrades schema 1, 2, 3, 4, 5 or 6 transactionally.
 Schema 1 gains household members, onboarding state and nullable preference
 ownership; schema 2 gains locale and declared observances; schema 3 gains empty
 plan storage and retry receipts; schema 4 gains an empty meal/member relation.
 Schema 5 gains durable meal-log receipts backfilled from currently active events.
+Schema 6 gains an import-receipt table for safe restoration retries.
 Keys for events already deleted before this upgrade cannot be recovered.
 Older meals remain unspecified and historical meal request keys remain retryable. Existing IDs/content,
 favorites, history, members and ownership remain intact. Old unassigned
@@ -315,7 +374,7 @@ invented. A completed/skipped schema-2 introduction stays completed/skipped.
 
 Back up the data directory before upgrading. The schema change rolls back if it
 fails. Unknown schema versions/foreign databases are refused, never reset. Once
-schema 6 is committed, older helpers (including schema-5 previews) cannot read it:
+schema 7 is committed, older helpers (including v0.5/schema 6) cannot read it:
 to roll back, stop all clients
 and restore the matching pre-upgrade data backup, preserving newer data separately.
 
@@ -518,7 +577,7 @@ Deletion removes the active plan with a revision check. Historical mutation rece
 remain in the local database to make retries safe; this is not complete erasure
 of all old plan text. Export includes current plans but not those receipts. To
 erase the entire profile, follow the separate data-directory deletion procedure.
-No JSON import or plan-version restore is added. Plan contents are historical:
+JSON import transfers active plans into an empty profile; old plan versions are not restored. Plan contents are historical:
 the agent must recheck current restrictions before recommending a saved plan.
 
 ### Recipes and actual meals
@@ -630,8 +689,8 @@ models, use Android devices, or read application/user databases. See
 Storage tests cannot prove that every host/model correctly interprets ambiguous
 conversation or reliably activates the skill. Allergen/dietary reasoning depends
 on that model and the user's information; the helper is not a dietary safety
-classifier. v0.5 excludes shopping service integrations, inventory tracking, nutrition
-tracking, JSON import, source scraping, and MCP services.
+classifier. v0.6 excludes shopping service integrations, inventory tracking, nutrition
+tracking, source scraping, and MCP services. JSON import does not merge profiles.
 
 ## Layout
 
@@ -648,6 +707,7 @@ install the same files. The installer accepts the original verified five-file
 manifest when updating/uninstalling an older installation, but still refuses local
 edits, extra files, redirected paths and incomplete/unknown manifests. No schema
 or storage behavior changes accompany this instruction reorganization.
+
 
 This is a standalone package: the hosting agent provides the model and local
 Python provides storage. Examples and tests are synthetic. Licensed under

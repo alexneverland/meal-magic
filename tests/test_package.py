@@ -69,6 +69,17 @@ class PackageTests(unittest.TestCase):
                                     encoding="utf-8", capture_output=True)
             self.assertEqual(update.returncode, 0, update.stdout + update.stderr)
             self.assertEqual(invoke({"action": "meal-list", "member_id": member["id"]}), [meal])
+            exported = invoke({"action": "export"})
+            restored = subprocess.run([sys.executable, str(installed / "scripts/meal_store.py"),
+                                       "--data-dir", str(base / "restored-synthetic-profile")],
+                                      input=json.dumps({"action": "import", "request_key": "package-import", "data": exported}),
+                                      encoding="utf-8", capture_output=True)
+            self.assertEqual(restored.returncode, 0, restored.stdout + restored.stderr)
+            queried = subprocess.run([sys.executable, str(installed / "scripts/meal_store.py"),
+                                      "--data-dir", str(base / "restored-synthetic-profile")],
+                                     input='{"action":"export"}', encoding="utf-8", capture_output=True)
+            self.assertEqual(queried.returncode, 0, queried.stdout + queried.stderr)
+            self.assertEqual(json.loads(queried.stdout)["result"], exported)
 
 
 if __name__ == "__main__":
