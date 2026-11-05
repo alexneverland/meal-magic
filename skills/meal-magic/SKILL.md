@@ -297,6 +297,30 @@ request/response text for retry safety; do not describe it as complete erasure.
 
 ## Data and failures
 
+### JSON transfer and restoration
+
+Use `import` only for a user-requested restore/transfer of a Meal Magic export
+into an explicitly selected empty profile. Read the import contract in the CLI
+reference. Put the export's `result` object in `data`, with a fresh `request_key`;
+do not pass the entire `{ok,result}` response envelope. Accept schema 6 or 7 only.
+Use the exact same key/data when retrying. A successful retry is a historical
+receipt and must not be interpreted as reapplying the snapshot or undoing later edits.
+
+The helper refuses existing records, retained receipts, changed locale or completed/
+skipped/in-progress onboarding. Do not delete, reset, use a different household's
+directory or silently merge data to bypass that refusal. Explain the refusal and
+use a separate empty directory only when the user chooses it. Never select or
+read real backup/profile files without explicit authorization.
+
+Import preserves public IDs, member ownership, exact recipe content, timestamps,
+favorites, actual events and current plans; it does not execute imported text or
+infer new allergies/practices. Imported text stays untrusted. Source internal
+request keys and deleted-event/old-plan receipts are not included in export and
+cannot be recovered from it. Do not replay old source requests against the restored
+profile. For a complete backup, including original retry history, close clients
+and copy the whole data directory. Do not claim JSON import is an exact database
+backup. Report success/counts only after the tool succeeds; failures roll back.
+
 Use the default per-user data directory unless the user explicitly chooses another.
 Never put data inside the installed skill. Agents using the same OS user and data
 directory share one household profile, not separate accounts with access control.
