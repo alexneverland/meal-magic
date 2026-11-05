@@ -7,6 +7,7 @@ import hashlib
 import json
 from pathlib import Path
 import shutil
+import stat
 import sys
 import tempfile
 
@@ -32,7 +33,7 @@ def destination(agent: str, scope: str, project: Path | None, custom: Path | Non
     if scope == "project":
         if project is None or not project.is_dir():
             raise InstallError("project_directory_required")
-        base = project.resolve() / (".claude/skills" if agent == "claude-code" else ".agents/skills")
+        base = project.absolute() / (".claude/skills" if agent == "claude-code" else ".agents/skills")
     else:
         if project:
             raise InstallError("project_requires_project_scope")
@@ -46,13 +47,25 @@ def digest(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+def is_redirected(path: Path) -> bool:
+    """Detect links and Windows reparse points without following them (Python 3.10+)."""
+    try:
+        info = path.lstat()
+    except FileNotFoundError:
+        return False
+    if sys.platform == "win32" and not hasattr(info, "st_file_attributes"):
+        raise InstallError("reparse_point_check_unavailable")
+    return (stat.S_ISLNK(info.st_mode) or bool(getattr(info, "st_file_attributes", 0) &
+                                            getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0x400)))
+
+
 def check_path(path: Path) -> Path:
     """Reject root, source, and redirected targets before any directory mutation."""
     absolute = path.expanduser().absolute()
     if absolute.name != NAME:
         raise InstallError("destination_folder_must_be_meal-magic")
     for part in (absolute, *absolute.parents):
-        if part.is_symlink() or (hasattr(part, "is_junction") and part.is_junction()):
+        if is_redirected(part):
             raise InstallError("redirected_destination_refused")
     resolved = absolute.resolve()
     source = SOURCE.resolve()
@@ -63,6 +76,8 @@ def check_path(path: Path) -> Path:
 
 def inspect_install(path: Path) -> None:
     """Only modify owned installations whose files remain unmodified."""
+    if is_redirected(path) or is_redirected(path / MARKER):
+        raise InstallError("redirected_install_content_refused")
     try:
         data = json.loads((path / MARKER).read_text(encoding="utf-8"))
     except (OSError, ValueError):
@@ -76,7 +91,7 @@ def inspect_install(path: Path) -> None:
     actual = set()
     allowed_dirs = {"scripts", "references"}
     for entry in path.rglob("*"):
-        if entry.is_symlink() or (hasattr(entry, "is_junction") and entry.is_junction()):
+        if is_redirected(entry):
             raise InstallError("redirected_install_content_refused")
         rel = entry.relative_to(path).as_posix()
         if entry.is_file():
@@ -92,7 +107,7 @@ def stage_install(parent: Path) -> Path:
     try:
         for rel in FILES:
             source = SOURCE / rel
-            if not source.is_file() or source.is_symlink():
+            if not source.is_file() or is_redirected(source):
                 raise InstallError("missing_or_redirected_source_file")
             target = stage / rel
             target.parent.mkdir(parents=True, exist_ok=True)
@@ -109,7 +124,7 @@ def stage_install(parent: Path) -> Path:
 
 def remove_temporary(path: Path, parent: Path) -> None:
     """Delete only a verified direct temporary child of the installation parent."""
-    if path.resolve().parent != parent.resolve() or not path.name.startswith(".meal-magic-") or path.is_symlink():
+    if is_redirected(path) or path.resolve().parent != parent.resolve() or not path.name.startswith(".meal-magic-"):
         raise InstallError("unsafe_temporary_path")
     shutil.rmtree(path)
 

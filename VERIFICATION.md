@@ -1,14 +1,18 @@
 # Verification — 2026-11-05
 
-Version: **0.3.0**, initial source preview proposed through a PR. Work was
+Version: **0.3.0**, source preview reviewed through pull requests. Work was
 performed without subagents. No tagged release or agent-directory installation
-is implied by the source repository. The implementation remains under review
-until the initial PR is explicitly merged.
+is implied by the source repository. Review/merge state is recorded in the
+corresponding pull request, not inferred from this report.
 
 ## Executed
 
-- Windows, Python **3.14.10**: **55/55 unittest tests passed**.
-- Windows, Python **3.12.10**: **55/55 unittest tests passed**.
+- Windows, Python **3.14.10**: **58/58 unittest tests passed**.
+- Windows, Python **3.12.10**: **58/58 unittest tests passed**.
+- Windows, Python **3.11.9**: **11/11 installer tests passed**, including actual
+  junction target/ancestor/content and project-alias regressions. The new regressions
+  first reproduced failures against the previous implementation on Python 3.11.
+  The fix uses `lstat`/Windows reparse attributes, not Python-3.12-only APIs.
 - The bundled Codex `skill-creator` `quick_validate.py` reported **Skill is valid!**
   for the actual `skills/meal-magic` directory.
 - Storage was exercised through direct calls and real subprocess CLI calls with
@@ -40,6 +44,9 @@ until the initial PR is explicitly merged.
   for Codex, Claude Code, Antigravity, and a custom agent. They verified lifecycle
   operations, documented path mapping, unchanged external personal data, refusal
   of modified/unmanaged/extra content, and rollback after a simulated update error.
+  Three additional Windows-only tests create real junctions between owned temporary
+  paths and verify rejection without changing external synthetic installations.
+  Those cases are skipped on Linux/macOS, where Windows junctions do not exist.
 - The package test built a ZIP from the explicit public-file allowlist, checked its
   exact entries and CRCs, extracted it, installed from the extracted manager, and
   ran that installed helper against an empty synthetic profile. The installed

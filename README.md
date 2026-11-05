@@ -68,11 +68,10 @@ encrypted data. The single-user SQLite file uses normal OS file permissions.
 
 Repository: [alexneverland/meal-magic](https://github.com/alexneverland/meal-magic).
 
-The initial implementation is proposed on `feat/initial-meal-magic` while `main`
-contains the bootstrap. To review and try that preview:
+Use `main` for the reviewed source:
 
 ```text
-git clone --branch feat/initial-meal-magic https://github.com/alexneverland/meal-magic.git
+git clone https://github.com/alexneverland/meal-magic.git
 cd meal-magic
 python --version
 python -m unittest discover -s tests -v
@@ -80,8 +79,8 @@ python tools/manage_skill.py install --agent codex
 ```
 
 Choose `--agent claude-code` or `--agent antigravity` instead of `codex` as needed.
-After the initial PR is merged, use `main` instead of the preview branch. No merge
-or versioned release is implied by the existence of this README.
+For an unmerged change, select its PR branch explicitly instead. A source preview
+on `main` is not a tagged release or a claim of completed conversational testing.
 
 Alternatively, download a source ZIP using GitHub's **Code → Download ZIP** on
 the chosen branch, extract it, and open a terminal beside this README and `tools/`.
@@ -290,7 +289,9 @@ files/directories, symlinks/junctions, and unmanaged installations rather than
 deleting them. Save any local edits/data outside the installation before resolving
 such a refusal. Directly importing a helper may create `__pycache__` in its folder;
 review and remove that generated cache if it blocks an update. There is no force
-overwrite option. Prefer running the helper as a CLI.
+overwrite option. Prefer running the helper as a CLI. On Windows, reparse points
+are checked without following them on every supported Python version, including
+3.10/3.11; project paths retain their original spelling until this check runs.
 
 The manager never opens the personal database. v0.3 uses schema version 3. On the
 first successful storage request, the helper upgrades schema 1 or 2 transactionally.
