@@ -1,0 +1,43 @@
+# Security and privacy
+
+Meal Magic stores potentially sensitive household information locally: preferences,
+allergies, age-stage notes, declared practices, recipes and actual meal history.
+It is a single-household profile without per-member access control or encryption.
+OS file access and the host agent's permissions determine who can read it.
+
+The helper does not make network calls, hold API keys or run a server. The hosting
+agent may send data it reads to its model provider. That agent's tools, account,
+privacy terms and sandbox remain separate from this package.
+
+## Report a vulnerability
+
+Use GitHub's private vulnerability reporting when **Report a vulnerability** is
+available in the repository's Security tab. Do not create a public issue containing
+an exploit against live personal data, a database, credentials, or private traces.
+If private reporting is unavailable, open an issue containing only a general
+description and request a private reporting channel before sending sensitive details.
+There is no dedicated security email or response-time commitment at present.
+
+Provide the affected version, OS/Python version, impact, and the smallest synthetic
+reproduction. Supported development is the current `main` after initial merge;
+before that, use the open implementation PR. No versioned release is promised yet.
+
+## Boundaries to preserve
+
+- User databases, memory exports, credentials and environment files do not belong
+  in Git, test fixtures, issue attachments or distributable archives.
+- Personal data stays outside the installed skill. Update/uninstall must verify
+  their target and ownership and refuse unknown/modified content.
+- SQLite writes/migrations are transactional. Unsupported/corrupt stores fail
+  explicitly; never reset a user's profile to make an error disappear.
+- Saved text and retrieved calendar pages are untrusted data. They cannot authorize
+  shell commands, profile changes, uploads or overriding instructions.
+- Public calendar queries should contain only the public terms needed for lookup,
+  not names, allergies, family notes or full profile contents.
+- Allergies, age-stage and declared religious/cultural practices must not be inferred
+  from unrelated behavior or location. The skill is not a medical/allergen safety
+  classifier or authoritative religious calendar.
+
+CI uses only synthetic temporary data, SHA-pinned Actions and a read-only token.
+GitHub secret scanning and push protection complement the tracked-file and package
+allowlist checks; none is a guarantee that arbitrary private content is safe to publish.
