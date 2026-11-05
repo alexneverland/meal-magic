@@ -17,7 +17,7 @@ spec.loader.exec_module(builder)
 class PackageTests(unittest.TestCase):
     def test_review_zip_has_only_public_files_and_can_install(self):
         with tempfile.TemporaryDirectory(prefix="meal-magic-package-test-") as temp:
-            base = Path(temp)
+            base = Path(temp).resolve()
             archive = builder.build(base / "dist")
             with zipfile.ZipFile(archive) as bundle:
                 version = (ROOT / "skills/meal-magic/VERSION").read_text().strip()

@@ -24,7 +24,7 @@ class StoreTests(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory(prefix="meal-magic-test-")
         self.addCleanup(self.tmp.cleanup)
-        self.data = Path(self.tmp.name) / "data"
+        self.data = Path(self.tmp.name).resolve() / "data"
         self.store = Store(self.data)
 
     def call(self, action, **fields):
@@ -194,7 +194,7 @@ class StoreTests(unittest.TestCase):
     def test_data_directory_precedence_and_install_separation(self):
         with patch.dict(os.environ, {"MEAL_MAGIC_DATA_DIR": str(self.data)}):
             self.assertEqual(Store().data_dir, self.data)
-            explicit = Path(self.tmp.name) / "other"
+            explicit = Path(self.tmp.name).resolve() / "other"
             self.assertEqual(Store(explicit).data_dir, explicit)
         with self.assertRaisesRegex(StoreError, "data_directory_inside_skill"):
             Store(SCRIPT.parents[1] / "private-data")

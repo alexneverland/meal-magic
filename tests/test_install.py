@@ -18,7 +18,7 @@ class InstallTests(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory(prefix="meal-magic-install-test-")
         self.addCleanup(self.tmp.cleanup)
-        self.base = Path(self.tmp.name)
+        self.base = Path(self.tmp.name).resolve()
 
     def test_user_locations_are_agent_specific(self):
         expected = {"codex": ".agents/skills/meal-magic", "claude-code": ".claude/skills/meal-magic",
