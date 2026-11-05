@@ -129,7 +129,13 @@ All nine installed files matched the source, and the installed CLI executed.
 Explicit invocation loaded the skill; the live conversation read the required
 references, initialized context, saved user-declared household/preferences and
 reused them before generating a quick recipe from supplied ingredients. The owner
-confirmed successful testing. Personal details from that session are intentionally
+confirmed successful testing. In subsequent owner-shared conversational transcripts,
+the agent scoped a temporary food dislike to one household member without calling
+it an allergy, tailored shared-meal suggestions, and kept a proposed future meal
+out of cooked/eaten history (reported empty by the agent). The owner separately
+confirmed successful removal of the temporary test preference. These are
+owner-reported conversational observations, not independent inspection of the
+SQLite rows or coverage of all manual acceptance scenarios. Personal details from that session are intentionally
 excluded from this report, repository and release assets.
 
 This owner-authorized actual-use acceptance check is evidence for basic Codex use,
@@ -152,7 +158,7 @@ each host. There is no claim that all agents discover or follow this skill.
 
 | Host | Local version observed | Actually tested | Not tested |
 |---|---|---|---|
-| Codex | Earlier CLI observation: `codex-cli 0.166.0-alpha.6`; live desktop/model version not captured | Synthetic storage/lifecycle checks plus installed v0.6.1 live smoke test: explicit invocation, onboarding, saved-context reuse and ingredient-based recipe generation; owner confirmed success. | Fresh-session automatic discovery and the complete conversational acceptance suite. |
+| Codex | Earlier CLI observation: `codex-cli 0.166.0-alpha.6`; live desktop/model version not captured | Synthetic storage/lifecycle checks; owner-confirmed live smoke test: explicit invocation, onboarding, saved-context reuse, ingredient-based recipe, scoped temporary dislike, future-meal exclusion from history, and preference removal. | Fresh-session automatic discovery, independently inspected live database traces, and the complete conversational acceptance suite. |
 | Claude Code | `2.1.159` | Version command; documented path mapping; install/update/uninstall and installed helper in a temporary synthetic project. | Live model session, automatic discovery, slash-command invocation, and conversational behavior. Current official docs may describe features newer than this local version. |
 | Antigravity CLI | `1.0.8` | Version command; documented path mapping; install/update/uninstall and installed helper in a temporary synthetic project. | Live CLI/App/IDE invocation, automatic discovery, and conversational behavior. |
 | Custom agents | No specific host | Explicit-directory installation and execution of the shared JSON CLI in a temporary destination. | Host registration, model behavior, tool permissions, or compatibility with any arbitrary custom agent. |
