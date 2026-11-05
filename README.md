@@ -5,7 +5,7 @@ remember food preferences and restrictions, keep an actual meal history, and
 save recipes and favorites. One shared Python core works with Codex, Claude Code,
 Antigravity, and custom agents that can load instructions and execute local tools.
 
-**Version 0.4.0 — source preview, no tagged release yet.** Agent installation layouts
+**Version 0.5.0 — source preview, no tagged release yet.** Agent installation layouts
 are documented; live model-session compatibility is not yet certified. See
 [VERIFICATION.md](VERIFICATION.md) for exactly what was tested.
 
@@ -37,7 +37,8 @@ See [the acceptance scenarios](tests/agent-scenarios.md) and
   groups, optional approximate age/needs notes, and first-use introduction status.
 - User-stated country/region, interest in local food occasions, and declared
   holiday/fasting/tradition schedules and rules, per member or household-wide.
-- Meals actually **cooked** and meals actually **eaten**, as separate events.
+- Meals actually **cooked** and meals actually **eaten**, as separate events,
+  with optional explicitly reported members and per-member history.
 - Complete saved recipes, including multiple versions with the same name, and
   favorites identified by stable IDs.
 - Saved multi-day meal plans and their consolidated shopping lists, kept together
@@ -87,7 +88,7 @@ on `main` is not a tagged release or a claim of completed conversational testing
 
 To inspect an unmerged change, clone its PR branch explicitly in a separate checkout.
 Back up an existing data directory before using this preview: its first successful
-storage request upgrades the database to schema 4.
+storage request upgrades the database to schema 5.
 
 Alternatively, download a source ZIP using GitHub's **Code → Download ZIP** on
 the chosen branch, extract it, and open a terminal beside this README and `tools/`.
@@ -108,7 +109,7 @@ To build a local review archive (without publishing anything):
 python tools/build_package.py
 ```
 
-This writes `dist/meal-magic-0.4.0.zip` and a SHA-256 sidecar. Packaging uses an
+This writes `dist/meal-magic-0.5.0.zip` and a SHA-256 sidecar. Packaging uses an
 explicit source-file allowlist, so databases, caches, personal settings, and
 untracked files cannot enter the archive through directory scanning.
 
@@ -300,18 +301,19 @@ overwrite option. Prefer running the helper as a CLI. On Windows, reparse points
 are checked without following them on every supported Python version, including
 3.10/3.11; project paths retain their original spelling until this check runs.
 
-The manager never opens the personal database. v0.4 uses schema version 4. On the
-first successful storage request, the helper upgrades schema 1, 2 or 3 transactionally.
+The manager never opens the personal database. v0.5 uses schema version 5. On the
+first successful storage request, the helper upgrades schema 1, 2, 3 or 4 transactionally.
 Schema 1 gains household members, onboarding state and nullable preference
 ownership; schema 2 gains locale and declared observances; schema 3 gains empty
-plan storage and retry receipts. Existing IDs/content,
+plan storage and retry receipts; schema 4 gains an empty meal/member relation.
+Older meals remain unspecified and historical meal request keys remain retryable. Existing IDs/content,
 favorites, history, members and ownership remain intact. Old unassigned
 preferences stay unassigned. No family, age, location, belief or practice is
 invented. A completed/skipped schema-2 introduction stays completed/skipped.
 
 Back up the data directory before upgrading. The schema change rolls back if it
 fails. Unknown schema versions/foreign databases are refused, never reset. Once
-schema 4 is committed, v0.1/v0.2/v0.3 cannot read it: to roll back, stop all clients
+schema 5 is committed, v0.1/v0.2/v0.3/v0.4 cannot read it: to roll back, stop all clients
 and restore the matching pre-upgrade data backup, preserving newer data separately.
 
 ## First-use introduction and family meals
@@ -356,11 +358,23 @@ while still considering shared-kitchen allergy concerns. One child's dislike is
 not recorded as another adult's dislike. An unspecific older-adult label does not
 cause automatic low-salt, soft-food, or other medical-diet assumptions.
 
+The skill keeps the clearly established diners through follow-up questions instead
+of asking who is eating every turn. With no established audience, it states a
+shared-household assumption for suggestions. It asks when identity or conflicting
+needs materially affect the dish. You can request one dish for a member with
+explicitly stated needs and another for the rest of the household; the agent
+labels the dishes and applies each audience's restrictions and stated shared-kitchen
+precautions without inventing a diagnosis or medical diet.
+
 A favorite food can be remembered without creating a saved recipe. The library's
 favorite flag still refers to a particular complete saved recipe. Meal history
-remains an event log without per-member attendance: logging a family meal does
+supports optional explicitly reported members: an unspecified family meal does
 not assert that every member ate it. No personal facts are filled into this source
 package; the shipped household starts empty.
+
+Ingredients supplied for a recipe stay in the current conversation. There is no
+persistent pantry, quantity or expiry tracking. Saved recipes and requested saved
+plans remain separate features, not evidence of current stock.
 
 ## Holidays, local occasions, and fasting practices
 
@@ -485,8 +499,8 @@ Plan storage accepts 1–93 meals within 31 days; each meal has a date, slot, na
 integer servings and ingredient/preparation details. Plans are listed/retrieved
 separately from actual meals. Saving or changing a plan does not record cooking,
 eating, buying groceries or consuming pantry stock. Recipe-library entries are
-not created just because a dish appears in a plan. There is no pantry inventory,
-per-person attendance tracking or reminder system in this change.
+not created just because a dish appears in a plan. There is no pantry inventory or
+reminder system. Actual meal membership is recorded separately when reported.
 
 The plan list supports paging through older plans with `limit`/`offset` and an
 optional date-overlap filter; there is no need to export the full personal profile
@@ -561,6 +575,35 @@ if mushrooms were stored as a prohibition instead of a dislike, it clarifies the
 change before replacing that restriction. Stated allergies are never inferred
 or silently removed.
 
+### Personal meal history
+
+Synthetic example with two previously identified household members:
+
+```text
+For Adult 1, use their stated eating requirements and make a separate dinner.
+For Child 1, suggest another dish using their own preferences.
+```
+
+This is still a suggestion. Only a later actual report records history:
+
+```text
+Adult 1 ate the separate rice dish today; Child 1 ate the pasta today.
+What has Adult 1 actually eaten recently? Suggest something different.
+```
+
+The host records separate dishes with their explicitly reported diners, then uses
+`meal-list` with the person's `member_id` and `kind=eaten` for personal variety.
+It does not infer eating from a cooked event or a planned audience. Members on a
+`cooked` event are explicitly reported recipients, not cooks or proof of eating.
+Unspecified and pre-upgrade events return `member_ids: []`, meaning unknown, and
+are excluded from personal history. Membership is optional, so an otherwise clear
+actual event can still be saved without asking for a full attendance list.
+
+Member removal refuses linked actual meals rather than erasing history. Event
+removal deletes only that event and its membership links. If a user requests a
+membership correction, removing the incorrect event and recording a replacement
+are separate transactions; an interrupted replacement must be reported and retried.
+
 ## Testing and limits
 
 ```text
@@ -577,8 +620,8 @@ models, use Android devices, or read application/user databases. See
 Storage tests cannot prove that every host/model correctly interprets ambiguous
 conversation or reliably activates the skill. Allergen/dietary reasoning depends
 on that model and the user's information; the helper is not a dietary safety
-classifier. v0.4 excludes shopping service integrations, inventory tracking, nutrition
-tracking, per-member actual-meal attendance, JSON import, source scraping, and MCP services.
+classifier. v0.5 excludes shopping service integrations, inventory tracking, nutrition
+tracking, JSON import, source scraping, and MCP services.
 
 ## Layout
 

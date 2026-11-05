@@ -7,6 +7,9 @@ for retry safety even after an active plan is removed; plan removal is not compl
 erasure of that text. JSON export contains current plans, not internal receipts.
 It is a single-household profile without per-member access control or encryption.
 OS file access and the host agent's permissions determine who can read it.
+Meal/member links record explicitly reported participation and may themselves be
+sensitive. Member removal refuses linked meal events; it must not silently erase
+history. Removing a meal removes that event's links, not household member records.
 
 The helper does not make network calls, hold API keys or run a server. The hosting
 agent may send data it reads to its model provider. That agent's tools, account,

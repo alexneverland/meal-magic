@@ -35,14 +35,16 @@ Precedence: `--data-dir PATH`, then `MEAL_MAGIC_DATA_DIR`, then:
 The file is `meal-magic.sqlite3`. Relative overrides resolve against the process
 working directory; prefer absolute paths. The tool refuses data inside its own
 installed skill. Each command uses a SQLite transaction, foreign keys and a
-10-second lock timeout. Failure rolls the transaction back. Schema version 4 is
-created lazily. Schemas 1/2/3 are upgraded transactionally and additively on the first
+10-second lock timeout. Failure rolls the transaction back. Schema version 5 is
+created lazily. Schemas 1/2/3/4 are upgraded transactionally and additively on the first
 successful request; IDs/content/favorites/history/members/ownership survive.
 Schema-1 preferences gain null ownership and pending onboarding; schema-2
 onboarding status stays unchanged. Locale starts empty with unknown holiday
 interest; no practices/beliefs are inferred. Back up data before upgrading.
 Schema 3 gains empty plans and mutation receipts without changing earlier records.
-Older schema-1/2/3 helpers cannot read the upgraded database;
+Schema 4 gains an empty meal/member relation; old events retain unspecified
+membership and old meal request payloads remain unchanged and retryable.
+Older schema-1/2/3/4 helpers cannot read the upgraded database;
 restore the pre-upgrade backup if reverting. Unknown versions or foreign databases
 are refused, never reset.
 The tool does not prune history. Listing limits do not delete stored records.
@@ -60,7 +62,7 @@ intent or decides whether an ingredient meets dietary requirements.
 | `context` | — | `limit` (1–100, default 20), `on` (ISO date) | Household, locale, observances, onboarding, all scoped preferences and recent meals; optional date context |
 | `onboarding-set` | `status` | — | Onboarding status and update timestamp |
 | `member-set` | `label` | `id` for update, `age_group`, `allergy_status`, `notes` | Saved household member |
-| `member-remove` | `id` | — | Removed member ID; refuses if preferences or observances are still linked |
+| `member-remove` | `id` | — | Removed member ID; refuses if preferences, observances or actual meals are still linked |
 | `locale-set` | — | `country`, `region`, `timezone`, `holiday_mode` | Stored locale and occasion-interest setting |
 | `observance-set` | `label`; also `schedule`, `rules` on creation | `id` for update, `kind`, `calendar`, `strictness`, `active`, `member_id`, `notes` | Saved scoped practice |
 | `observance-remove` | `id` | — | Removed observance ID |
@@ -70,8 +72,8 @@ intent or decides whether an ingredient meets dietary requirements.
 | `recipe-search` | — | `query` (default empty), `favorites_only` (boolean), `limit` | Compact recipe list |
 | `recipe-get` | `id` | — | Full exact recipe |
 | `recipe-favorite` | `id` | `favorite` (boolean, default true) | Favorite state |
-| `meal-log` | `name`, `kind`, `occurred_on`, `request_key` | `recipe_id` | Actual event |
-| `meal-list` | — | `kind`, `limit` | Recent actual events |
+| `meal-log` | `name`, `kind`, `occurred_on`, `request_key` | `recipe_id`, `member_ids` | Actual event with reported members |
+| `meal-list` | — | `kind`, `limit`, `member_id` | Recent actual events, optionally for one member |
 | `meal-remove` | `id` | — | Removed ID |
 | `plan-save` | `request_key`, `title`, `meals`, `shopping_list`; also `id`, `expected_revision` for update | `notes` | Complete saved plan/list snapshot |
 | `plan-get` | `id` | — | Current complete plan/list snapshot |
@@ -156,6 +158,53 @@ Meal kinds: `cooked` or `eaten` only. `occurred_on` is an explicit `YYYY-MM-DD`
 calendar date, not an inferred timestamp. The agent determines whether the event
 actually happened and resolves the user's local date; the helper validates the
 format, not the truth of that claim. `created_at` and `updated_at` use UTC.
+
+### Actual meal membership
+
+`meal-log.member_ids` is an optional list of up to 100 distinct existing member
+IDs. Strings must be nonempty and at most 200 characters; surrounding whitespace
+is stripped. Null, wrong types, duplicates (including after trimming) and oversized
+lists fail with `invalid_member_ids`; unknown IDs fail with `member_not_found`.
+The event and all its member links save in the same transaction. IDs are an
+unordered set, returned in sorted order in every meal from `meal-log`, `meal-list`,
+`context` and `export`. The membership list is not necessarily exhaustive: include
+only the members actually identified in the report.
+
+Omitted `member_ids` or `[]` means unspecified, not an empty household, nobody
+eating or all members eating. Migrated events remain unspecified. For `eaten`,
+members are actual reported diners; for `cooked`, members are reported recipients
+of the prepared dish, not cooks or confirmation of eating. A suggestion, planned
+audience, saved recipe or shared-meal default never proves actual participation.
+The host resolves actual reports, including clear conversational references, and
+asks only when ambiguity matters. It may log a clear event without membership.
+
+`meal-list.member_id` filters by one existing member ID, optionally together with
+`kind`, before applying `limit` (default 20, maximum 100). Null/empty/invalid IDs
+fail with `invalid_member_id`; unknown IDs fail with `member_not_found`.
+Ordering remains occurrence date descending, then creation time descending, then
+event ID. Unspecified events are excluded from a member's history. For personal
+consumption/variety use `kind=eaten`; a cooked event is not evidence of eating.
+
+Reordering `member_ids` is the same retry; changing the member set with the same
+request key fails `request_key_conflict`. Old schema-4 meal keys still replay with
+omitted or empty membership without adding events or rewriting historical payloads.
+`meal-remove` deletes only the selected event and its membership links. It never
+deletes members or other meals. `member-remove` refuses a member linked to any meal
+with `member_has_meals_remove_events_explicitly`. Do not delete events just to
+bypass this guard. A user-authorized membership correction removes the incorrect
+event and logs a replacement with a new key; these are separate transactions, so
+report and recover an interrupted replacement explicitly.
+
+```json
+{"action":"meal-log","request_key":"synthetic-member-meal","kind":"eaten","name":"Separate synthetic dinner","occurred_on":"2026-11-05","member_ids":["returned-member-id"]}
+```
+
+```json
+{"action":"meal-list","member_id":"returned-member-id","kind":"eaten","limit":20}
+```
+
+The IDs above are placeholders: use IDs returned by `member-set`/`context`.
+Recipe ingredients remain conversational context, not persistent pantry records.
 
 `request_key`: required nonempty opaque string (up to 200 characters) for a save
 or log, unique within that action's table. Reuse it with identical fields for a

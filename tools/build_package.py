@@ -15,7 +15,8 @@ PUBLIC_FILES = (
     "skills/meal-magic/scripts/meal_store.py", "skills/meal-magic/references/storage-cli.md",
     "tools/manage_skill.py", "tools/build_package.py", "tools/check_repository.py",
     "tests/test_store.py", "tests/test_household.py", "tests/test_observances.py",
-    "tests/test_install.py", "tests/test_package.py", "tests/test_plans.py", "tests/agent-scenarios.md",
+    "tests/test_install.py", "tests/test_package.py", "tests/test_plans.py", "tests/test_meal_members.py",
+    "tests/agent-scenarios.md",
 )
 
 
