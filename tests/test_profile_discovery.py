@@ -27,6 +27,7 @@ class SharedProfileTests(unittest.TestCase):
         self.paths = [self.native, self.private]
         self.addCleanup(patch.stopall)
         patch.object(module, "windows_legacy_paths", lambda: self.paths).start()
+        patch.object(module, "legacy_view_redirected", return_value=False).start()
 
     def shared(self):
         store = Store(self.target)
@@ -94,6 +95,45 @@ class SharedProfileTests(unittest.TestCase):
         with self.assertRaisesRegex(StoreError, "shared_profile_already_initialized"):
             self.call("profile-select", database=str(self.native))
         self.assertEqual(before, {p: self.digest(p) for p in self.paths})
+
+    def test_incomplete_virtualized_view_requires_explicit_source_choice(self):
+        self.seed(self.private, "Known synthetic member")
+        with patch.object(module, "legacy_view_redirected", return_value=True):
+            with self.assertRaisesRegex(StoreError, "profile_discovery_incomplete_choose_source"):
+                self.call()
+            self.assertFalse((self.target / "meal-magic.sqlite3").exists())
+            info = self.call("storage-info")["result"]
+            self.assertTrue(info["legacy_view_redirected"])
+            self.assertEqual(info["legacy_candidates"][0]["counts"]["members"], 1)
+            self.call("profile-select", database=str(self.private))
+            self.assertEqual(len(self.call()["result"]["household"]["members"]), 1)
+
+    @unittest.skipUnless(os.name == "nt", "Windows handle path aliases")
+    def test_physical_source_identity_survives_different_host_aliases(self):
+        self.seed(self.native, "Synthetic member")
+        actual = module.physical_path(self.native)
+        self.paths = [Path(actual)]
+        first = self.call()
+        self.paths = [self.native]
+        self.assertEqual(self.call()["storage"]["profile_id"], first["storage"]["profile_id"])
+
+    @unittest.skipUnless(os.name == "nt", "Windows virtualized source handles")
+    def test_native_host_can_reopen_profile_selected_from_a_virtualized_alias(self):
+        self.seed(self.native)
+        self.seed(self.private, "Synthetic chosen household")
+        self.paths = [self.native]
+        original_handle_path = module.physical_path
+        def virtualized_handle(path):
+            return str(self.private) if path == self.native else original_handle_path(path)
+        with patch.object(module, "physical_path", side_effect=virtualized_handle), \
+                patch.object(module, "legacy_view_redirected", return_value=True):
+            self.call("profile-select", database=str(self.private))
+            first = self.call()
+        # An unpackaged host sees the true empty native shell plus the same private source.
+        self.paths = [self.native, self.private]
+        second = self.call()
+        self.assertEqual(first["storage"]["profile_id"], second["storage"]["profile_id"])
+        self.assertEqual(second["result"]["household"]["members"][0]["label"], "Synthetic chosen household")
 
     def test_conflict_selection_cannot_read_an_arbitrary_path(self):
         self.seed(self.native, "Synthetic member")
@@ -371,6 +411,7 @@ with m.profile_lock(pathlib.Path(sys.argv[2])): os._exit(0)
 import importlib.util,json,pathlib,sys
 s=importlib.util.spec_from_file_location('fixture_store',sys.argv[1]);m=importlib.util.module_from_spec(s);s.loader.exec_module(m)
 m.windows_legacy_paths=lambda:[pathlib.Path(sys.argv[3])]
+m.legacy_view_redirected=lambda:False
 store=m.Store(pathlib.Path(sys.argv[2]));store.shared_windows=True
 print(json.dumps(store.handle({'action':'member-set','label':sys.argv[4]})))
 """

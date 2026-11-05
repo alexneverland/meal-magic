@@ -82,7 +82,7 @@ def checked_path(path: Path) -> Path:
 
 
 def native_windows_path(path: Path) -> Path:
-    """Address the local volume, including native AppData hidden by an MSIX overlay.
+    """Address a local volume without assuming its spelling bypasses MSIX.
 
     This is a filesystem alias, not privilege escalation: normal Windows ACLs apply.
     No package names or host-specific storage implementation are required.
@@ -128,7 +128,28 @@ def sqlite_uri(path: Path, mode: str = "ro") -> str:
 
 def profile_key(path: Path) -> str:
     """Stable origin keys even when Windows hosts spell the same path differently."""
-    return os.path.normcase(os.path.abspath(path))
+    spelling = str(path)
+    if os.name == "nt":
+        if spelling.casefold().startswith("\\\\?\\unc\\"):
+            spelling = "\\\\" + spelling[8:]
+        elif spelling.startswith("\\\\?\\") and len(spelling) > 5 and spelling[5] == ":":
+            spelling = spelling[4:]
+    return os.path.normcase(os.path.abspath(spelling))
+
+
+def legacy_view_redirected() -> bool:
+    """Detect an incomplete legacy view; volume aliases can also be virtualized."""
+    if os.name != "nt":
+        return False
+    user_local = Path.home() / "AppData" / "Local"
+    roots = {Path(os.environ.get("LOCALAPPDATA", user_local)), user_local}
+    for root in roots:
+        requested = checked_path(root / "MealMagic" / "meal-magic.sqlite3")
+        if requested.is_file():
+            actual = physical_path(requested)
+            if actual is None or profile_key(Path(actual)) != profile_key(requested):
+                return True
+    return False
 
 
 def physical_path(path: Path) -> str | None:
@@ -248,6 +269,11 @@ def discover_profiles(target: Path) -> list[Path]:
         except FileNotFoundError:
             continue
         path = checked_path(path)
+        if os.name == "nt":
+            actual = physical_path(path)
+            if actual is None:
+                raise StoreError("profile_physical_path_unavailable")
+            path = checked_path(Path(actual))
         info = path.stat()
         if not path.is_file():
             raise StoreError("invalid_legacy_profile")
@@ -308,6 +334,8 @@ def prepare_shared_profile(target: Path, selected_database: str | None = None) -
     # outside the exact legacy locations independently discovered above.
     snapshots, source_locks = [], []
     try:
+        if not target.exists() and selected_database is None and legacy_view_redirected():
+            raise StoreError("profile_discovery_incomplete_choose_source")
         if origins is not None and origins["state"] == "ready" and not target.exists():
             raise StoreError("shared_profile_missing")
         if target.exists():
@@ -328,7 +356,7 @@ def prepare_shared_profile(target: Path, selected_database: str | None = None) -
         if origins is not None and target.exists():
             if selected_database is not None:
                 chosen = origins.get("selected_source")
-                if chosen is None or Path(chosen) != Path(selected_database):
+                if chosen is None or profile_key(Path(chosen)) != profile_key(Path(selected_database)):
                     raise StoreError("shared_profile_already_initialized")
             for path, snapshot, meaningful, fingerprint in snapshots:
                 old = origins["sources"].get(profile_key(path))
@@ -343,7 +371,8 @@ def prepare_shared_profile(target: Path, selected_database: str | None = None) -
             raise StoreError("multiple_existing_profiles")
         selected = (meaningful or snapshots or [None])[0]
         if selected_database is not None:
-            selected = next((item for item in snapshots if item[0] == Path(selected_database)), None)
+            selected = next((item for item in snapshots
+                             if profile_key(item[0]) == profile_key(Path(selected_database))), None)
             if selected is None:
                 raise StoreError("profile_candidate_not_found")
             if target.exists():
@@ -609,6 +638,7 @@ class Store:
                   "selection": "shared_windows_default" if self.shared_windows else "explicit_or_platform_default",
                   "profile_id": None, "legacy_candidates": []}
         if self.shared_windows:
+            result["legacy_view_redirected"] = legacy_view_redirected()
             checked_path(self.data_dir)
             marker = checked_path(self.data_dir / ".origins.json")
             data = read_origins(marker)

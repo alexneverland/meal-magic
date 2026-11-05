@@ -19,7 +19,7 @@ preferences. Context returns the household, locale, declared observances, onboar
 preference, and the latest 20 actual events;
 request up to 100 events when useful. Never treat a failed read as an empty profile.
 Windows first use discovers and adopts an existing Meal Magic profile automatically.
-On a profile conflict, read `storage-info`, explain the candidates and ask once which
+On a profile conflict or incomplete virtualized view, read `storage-info`, explain the candidates and ask once which
 to use; call `profile-select` only with that explicit choice. Never reset, overwrite,
 switch directories or start onboarding to bypass a discovery failure. Update every
 host's skill before sharing the new default; old helpers do not follow its location.

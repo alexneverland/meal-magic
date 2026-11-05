@@ -58,8 +58,9 @@ The tool does not prune history. Listing limits do not delete stored records.
 Without an explicit directory or environment override, discover existing Meal Magic
 databases before creating a new profile. Known candidates are the native old
 LocalAppData/MealMagic path (both the environment and OS-user-home spelling), and
-exact LocalCache/Local/MealMagic paths under the user's MSIX packages. Windows
-volume aliases distinguish native files from AppData overlays; OS ACLs and host
+exact LocalCache/Local/MealMagic paths under the user's MSIX packages. Physical
+handle paths identify files; volume aliases themselves can still be virtualized.
+OS ACLs and host
 permissions remain in force. Links/reparse points are refused, and unsupported,
 inaccessible or corrupt candidates fail closed. No unrelated application records
 or arbitrary backup files are searched.
@@ -81,6 +82,15 @@ remembered; repeating the same choice is safe, while choosing another after shar
 initialization fails `shared_profile_already_initialized`. Never delete/reset an
 existing shared profile to make selection work. Explicit path/environment overrides
 are independent selections and do not discover or migrate any other profile.
+
+`profile_discovery_incomplete_choose_source` means an existing MSIX shadow hides
+the native legacy view. Do not infer that the visible candidate is the only profile.
+Explain the incomplete view and ask once which visible household to continue, then
+use `profile-select` with that explicit choice. Alternatively, a host with the
+normal native view can complete first use. Never launch a process outside a host's
+security boundary, change package settings or bypass permissions to inspect hidden
+files. Every discovered source is recorded using its physical handle path so that
+other hosts cannot reinterpret a logical alias as a different original database.
 
 All hosts must update their skill before sharing this default. Old helpers still
 use old paths. Later changes to retained legacy sources fail with

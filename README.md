@@ -5,13 +5,14 @@ remember food preferences and restrictions, keep an actual meal history, and
 save recipes and favorites. One shared Python core works with Codex, Claude Code,
 Antigravity, and custom agents that can load instructions and execute local tools.
 
-**Development preview 0.6.2 — automatic Windows profile discovery.** The latest
-published release is **v0.6.1**. Basic live use of v0.6.1 in Codex was observed on
+**Version 0.6.2 — Windows profile discovery and shared storage.**
+Basic live use of v0.6.1 in Codex was observed on
 2026-11-05 and confirmed working by the project owner. The new discovery behavior
-has synthetic automated coverage; live upgraded-agent acceptance is pending. See
+has synthetic automated coverage and an owner-authorized Codex storage upgrade
+with export/backup comparison; clean live Antigravity reinstall acceptance is pending. See
 [VERIFICATION.md](VERIFICATION.md) for exactly what was tested.
 
-**[Download v0.6.1 (release ZIP and SHA-256 checksum)](https://github.com/alexneverland/meal-magic/releases/tag/v0.6.1)** · [All releases](https://github.com/alexneverland/meal-magic/releases)
+**[Download the latest published release (ZIP and SHA-256 checksum)](https://github.com/alexneverland/meal-magic/releases/latest)** · [All releases](https://github.com/alexneverland/meal-magic/releases)
 
 ## Agent testing status
 
@@ -93,19 +94,20 @@ python tools/manage_skill.py install --agent codex
 ```
 
 Choose `--agent claude-code` or `--agent antigravity` instead of `codex` as needed.
-For the **fixed v0.6.1 release snapshot**, check out the published tag before testing
+For the **fixed v0.6.2 release snapshot**, once its tag is published on the Releases
+page, check it out before testing
 or installing:
 
 ```text
 git clone https://github.com/alexneverland/meal-magic.git
 cd meal-magic
-git checkout v0.6.1
+git checkout v0.6.2
 python tools/check_repository.py
 python -m unittest discover -s tests -v
 python tools/manage_skill.py install --agent codex
 ```
 
-Alternatively, get the versioned ZIP from the [v0.6.1 release](https://github.com/alexneverland/meal-magic/releases/tag/v0.6.1) and verify its SHA-256 checksum. For an unmerged change, select its PR branch explicitly.
+Alternatively, get the versioned ZIP from [Releases](https://github.com/alexneverland/meal-magic/releases) and verify its SHA-256 checksum. For an unmerged change, select its PR branch explicitly.
 
 To inspect an unmerged change, clone its PR branch explicitly in a separate checkout.
 Back up an existing data directory before upgrading: its first successful
@@ -269,8 +271,8 @@ copy even when environment variables and displayed paths match. Version 0.6.2
 uses a per-user directory outside AppData, shared by every updated local host.
 Before creating its database, the helper checks the old `LocalAppData/MealMagic`
 location and exact `LocalCache/Local/MealMagic` locations beneath the user's MSIX
-packages. It uses native volume aliases so a private overlay cannot hide the
-original file. Normal filesystem permissions still apply; this does not disable
+packages. It checks the actual OS-opened paths; volume aliases alone are not proof
+that AppData is unvirtualized. Normal filesystem permissions still apply; this does not disable
 agent sandboxing or scan unrelated application data.
 
 If one distinct populated profile exists, the helper automatically adopts a
@@ -288,6 +290,17 @@ discovered source only before shared initialization; it never merges or replaces
 an existing shared database. Unknown/corrupt/inaccessible profiles stop discovery
 instead of being treated as absent. Existing `--data-dir` and `MEAL_MAGIC_DATA_DIR`
 overrides remain deliberate isolated profiles and bypass automatic discovery.
+
+An old MSIX shadow can hide a native legacy file even through a volume alias. If
+that makes initial discovery incomplete, `profile_discovery_incomplete_choose_source`
+requests one explicit choice from the visible `storage-info` candidates instead
+of guessing. Choosing the known household needs no manual copies; every original
+is retained. Alternatively, an agent with the normal native filesystem view can
+perform the same automatic first use. Fresh installations create the common
+outside-AppData profile directly after discovery. Once shared initialization is
+complete, both updated hosts use that common profile. Stored source paths are
+physical handle paths, preventing an alias from referring to a different profile
+when another host opens it.
 
 Update the skill in **every host** before using the shared default. Older helpers
 keep their old paths. If an old helper changes a source after adoption, the new

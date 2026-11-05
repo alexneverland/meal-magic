@@ -44,7 +44,7 @@ description and request a private reporting channel before sending sensitive det
 There is no dedicated security email or response-time commitment at present.
 
 Provide the affected version, OS/Python version, impact, and the smallest synthetic
-reproduction. The current public release is **v0.6.1**; security reports are accepted
+reproduction. The current release is **v0.6.2**; security reports are accepted
 for that release and the current `main` development source. Fixes are delivered
 through `main` and a subsequent release as appropriate; no long-term maintenance
 or separate backport policy is promised. Use the reporting channels above for
