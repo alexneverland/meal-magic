@@ -78,9 +78,11 @@ See [the acceptance scenarios](tests/agent-scenarios.md) and
 ## Recipe presentation
 
 Complete recipes on the current source use a clear title, servings, known times
-and difficulty, ingredient quantities, numbered steps and relevant tips.
+and difficulty, ingredient quantities, numbered steps and relevant tips. Where
+useful, a short note offers one ingredient swap and any cooking adjustment.
 Meal Magic uses a rich layout when the host can render the complete recipe,
-with Markdown or plain text as fallbacks. On surfaces that display icons reliably,
+with Markdown or plain text as fallbacks. In Markdown, key cooking cues stand out
+in bold. On surfaces that display icons reliably,
 small icons make the section labels easier to spot. The same layout applies to
 generated and saved recipes. You can still ask for the exact saved text.
 
