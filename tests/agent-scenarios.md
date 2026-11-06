@@ -75,12 +75,29 @@ Record host version, model, installation scope, exact synthetic prompt, tool JSO
 requests/results, database observations, final response, and pass/fail. If a model
 was not actually run, record "not tested", not "compatible". No evaluation requires
 changing personal settings or launching subagents.
+
+## Recipe presentation
+
+Run these scenarios in fresh Codex and Antigravity chats with disposable
+profiles. Record the host, surface and available rendering features. Inspect
+the rendered response for hierarchy, legibility and completeness. Assess rich
+cards only on a surface that exposes a suitable native renderer. Use a real
+text-only surface to verify behavior without Markdown when one is available.
+An explicit plain-text request exercises the same fallback on other surfaces.
+
+| Synthetic context / user messages | Observable pass criteria |
+|---|---|
+| "Give me a complete lemon chickpea and rice recipe for two, using dry rice and canned chickpeas." | Clear title and yield for two, useful prep and cook estimates, a reasonable difficulty label, measurable quantities, and numbered steps with short headings and complete directions. Essential heat, timing and doneness details remain easy to find. No recipe or meal is saved. |
+| Run the full-recipe request on a Markdown surface without suitable native cards, then ask for the same recipe in plain text. If a suitable native renderer is available, also check the default there. | Markdown uses readable headings and lists. Plain text uses section labels and numbers with no formatting syntax. A supported rich layout displays the full recipe. Each rendering preserves the ingredients, quantities and instructions. No unsupported markup or placeholder UI appears. |
+| Seed a synthetic legacy recipe with deliberately loose formatting, Greek text, boundary newlines, measured ingredients and explicit heat and timings. Leave servings, prep time and difficulty unspecified. Ask to see it, then ask for the exact saved text. | Default presentation improves navigation while preserving the original ingredient quantities, heat, timings and step order. Missing values are omitted or marked unspecified. The exact request shows the original text literally. Re-read the same ID with `recipe-get` and compare content to the seeded string, including boundary newlines. Confirm no recipe version or meal event was added. |
+| Seed a synthetic saved recipe with an ingredient that conflicts with a stored restriction for the intended diner. Ask to view the saved recipe. | Shows the original without swapping the ingredient. The conflict is identified separately and the recipe is not recommended as suitable for that diner. Storage is unchanged. |
+
 ## Soft meal variety (unreleased instruction refinement)
 
-These five additional conversational scenarios are **not yet executed with live
-models**. Use separate disposable synthetic profiles and explicitly seed the
-reported eaten/cooked events. Assess the reasoning and stored state, not a fixed
-expected dish name. Dietary restrictions always remain in force.
+Use separate disposable synthetic profiles and explicitly seed the reported
+eaten/cooked events. Assess the reasoning and stored state across the set.
+Dietary restrictions always remain in force. The README records one earlier
+Codex example. This scenario set still needs a live pass on both hosts.
 
 | Synthetic context / user messages | Observable pass criteria |
 |---|---|
@@ -88,6 +105,7 @@ expected dish name. Dietary restrictions always remain in force.
 | Compare roast chicken followed by chicken soup, and lentils followed by lemon chickpeas, with both recent meals explicitly reported eaten. | Can recognize different dish forms/preparations despite shared ingredients or food categories. Does not reject soup merely because it contains chicken or chickpeas merely because lentils were eaten. These are contextual examples, not mandatory recipe choices. |
 | Actual eaten history contains pasta with minced beef. Ask whether pasta with beef would be different enough; the sauce/preparation is not specified. | Explicitly acknowledges that names alone are insufficient and gives a conditional comparison based on preparation/sauce. Does not label the meals universally different, acceptable or forbidden. May offer a clearly different option after explaining why; an unrelated suggestion alone does not pass. No unnecessary questionnaire is imposed. |
 | Recently ate roast chicken. "Use my leftover roast chicken and rice for dinner; that's what I have." Then explicitly ask to repeat the previous dish instead. | Uses the declared leftovers/ingredients and respects the explicit repeat despite soft variety. Does not infer other pantry stock, remove restrictions, change preferences or record actual consumption from these requests. |
+| Yesterday's meal was pasta with minced beef. "I only have pasta, canned tomatoes and white beans, and I can't shop today. Suggest dinner." | Uses the stated ingredients and budget constraint. Treats a tomato and white bean pasta as a reasonable candidate despite the shared pasta. Avoids inventing pantry stock, a spending amount or an ingredient ban. |
 | Seed a recent roast-chicken eaten event for synthetic Adult 1 and a cooked-only roast-chicken event for Adult 2, with no eaten events for Adult 2. "Suggest dinner for Adult 2. First briefly summarize their recorded consumption: does the history show they already ate roast chicken?" Then "Something else, please." | States that Adult 2 has no recorded eaten meal and that cooked-only history does not establish consumption. Does not cite Adult 1's meal as a recent repeat for Adult 2 or exclude chicken on that basis. The follow-up offers a materially different suitable option where feasible, rather than only renaming/changing a garnish. No permanent dislike or actual event is saved; verify the same stored state afterward. |
 
 ## Windows first-use shared discovery (0.6.2)

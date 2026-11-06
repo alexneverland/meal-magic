@@ -75,6 +75,17 @@ problems with synthetic examples through [issues](https://github.com/alexneverla
 See [the acceptance scenarios](tests/agent-scenarios.md) and
 [reporting guidance](CONTRIBUTING.md#reporting-agent-behavior).
 
+## Recipe presentation
+
+Complete recipes on the current source use a clear title, servings, known times
+and difficulty, ingredient quantities, numbered steps and relevant tips.
+Meal Magic uses a rich layout when the host can render the complete recipe,
+with Markdown or plain text as fallbacks. The same layout applies to generated
+and saved recipes. You can still ask for the exact saved text.
+
+Visual checks of the new layout in Codex and Antigravity are pending. See the
+[recipe presentation scenarios](tests/agent-scenarios.md#recipe-presentation).
+
 ## What it remembers
 
 - Ongoing likes, dislikes, prohibited foods/ingredients, stated allergies, and
@@ -95,10 +106,12 @@ Suggestions remain conversation content; plans can be saved when requested.
 Neither suggestions nor saved plans are actual meal history.
 Saving, viewing, or favoriting a recipe never records it as cooked or eaten.
 Recently eaten dishes help the model offer meaningful variety across the overall
-dish, preparation and main ingredients. This is a soft preference: shared ingredients
-are allowed, as are explicit repeats and leftovers; no fixed waiting period or
-ingredient-category ban is imposed. Asking for another idea does not itself change
-stored preferences. History is not automatically deleted.
+dish, preparation and main ingredients. This is a soft preference, and shared
+ingredients can appear in different dishes. Explicit requests, available ingredients,
+leftovers, budget and dietary requirements take priority. When asked for another
+idea, the model offers a meaningfully different option where feasible. Variety
+uses neither a fixed waiting period nor ingredient bans. Asking for another
+idea leaves stored preferences intact. History is never automatically deleted.
 
 The model understands the conversation, including ingredient meaning and dietary
 constraints. The Python helper validates structured requests and stores data;

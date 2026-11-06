@@ -39,7 +39,7 @@ reference for unrelated requests.
 |---|---|
 | First relevant use, household/member setup, preference changes, diner selection or restrictions for a meal | [Household and preferences](references/household.md) |
 | Active declared practices, opted-in local occasions, requested holiday/fasting dates or locale changes | [Occasions and practices](references/occasions.md) |
-| Meal suggestions, recipe generation/library/favorites, multi-day plans or shopping-list edits | [Recipes and plans](references/recipes-plans.md) |
+| Meal suggestions, recipe generation/presentation/library/favorites, multi-day plans or shopping-list edits | [Recipes and plans](references/recipes-plans.md) |
 | Actual cooked/eaten reports, member consumption/variety, event correction/removal or log retries | [Meal history](references/meal-history.md) |
 | Import/restore, JSON fields, errors, migrations, request keys or any storage call | [Storage CLI](references/storage-cli.md) |
 
