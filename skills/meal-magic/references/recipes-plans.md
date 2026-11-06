@@ -59,7 +59,10 @@ only when the current host exposes a suitable renderer that can show the complet
 recipe. Otherwise use Markdown headings, ingredient bullets and a numbered
 method. For plain text, use simple section labels, line breaks, one ingredient
 per line and numbered steps. Use plain text when Markdown support is absent.
-Use icons only where supported and keep them optional. Avoid unsupported HTML,
+On rich and Markdown surfaces with reliable icon support, add a small icon
+alongside each major section label by default (for example, 🧺 Ingredients,
+🍳 Method and 💡 Tip). Keep the labels readable without the icons. Skip icons
+in plain text or when glyph support is uncertain. Avoid unsupported HTML,
 invented components and raw diagram syntax.
 
 For a saved recipe, use its returned title and content. Add visual structure
