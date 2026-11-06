@@ -8,8 +8,9 @@ Antigravity, and custom agents that can load instructions and execute local tool
 **Version 0.6.2 — Windows profile discovery and shared storage.**
 Basic live use of v0.6.1 in Codex was observed on
 2026-11-05 and confirmed working by the project owner. The new discovery behavior
-has synthetic automated coverage and an owner-authorized Codex storage upgrade
-with export/backup comparison; clean live Antigravity reinstall acceptance is pending. See
+has synthetic automated coverage, an owner-authorized Codex storage upgrade with
+export/backup comparison, and an owner-reported successful clean Antigravity
+v0.6.2 reinstall that retrieved the same shared profile. See
 [VERIFICATION.md](VERIFICATION.md) for exactly what was tested.
 
 **[Download the latest published release (ZIP and SHA-256 checksum)](https://github.com/alexneverland/meal-magic/releases/latest)** · [All releases](https://github.com/alexneverland/meal-magic/releases)
@@ -23,13 +24,18 @@ correctly leaving suggested/planned meals out of actual history. The owner also
 reported successful removal of a temporary test preference. These are owner-reported
 conversational checks, not an independent audit of the SQLite writes. This is a
 user acceptance check, separate from synthetic development tests and not a pass
-of every acceptance scenario. Antigravity testing remains
-pending. Automated development tests use isolated synthetic profiles.
+of every acceptance scenario. On 2026-11-06, the owner also reported a clean
+Antigravity v0.6.2 uninstall/reinstall followed by successful default-profile
+discovery: the physical database path and profile ID matched Codex, and existing
+household/preferences were retrieved without a data-directory override, import or
+new onboarding. This is shared-profile acceptance evidence; broader Antigravity
+meal conversations remain untested. Automated development tests use isolated
+synthetic profiles.
 
 | Host | Live conversational testing | Evidence so far |
 |---|---|---|
-| Codex | Basic live smoke test passed; owner confirmed | Installed v0.6.1, explicit invocation, onboarding, stored-context reuse, ingredient-based recipe generation, member-scoped preference, planned-meal exclusion from actual history, and test-preference removal (owner-reported); automatic discovery and the full scenario suite remain unverified |
-| Antigravity | Planned tests by the maintainers | Storage/lifecycle tests and installation-path checks; live App/CLI/IDE conversations still pending |
+| Codex | Basic live smoke test passed; owner confirmed | v0.6.1 cooking/profile smoke test and v0.6.2 shared-storage upgrade with export/backup comparison; automatic skill invocation and the full scenario suite remain unverified |
+| Antigravity | Clean v0.6.2 reinstall and shared-profile retrieval passed; owner-reported | Default-profile discovery returned the same physical database and profile ID as Codex, with existing household/preferences and completed onboarding; broader meal conversations and cross-host live writes remain unverified |
 | Claude Code | Not tested conversationally by the maintainers; community reports welcome | Documented installation and tested storage/lifecycle path; no verified live-model behavior |
 | Custom agents | Each integration needs its own validation | Shared JSON CLI and explicit-directory installer tested; no blanket host compatibility claim |
 

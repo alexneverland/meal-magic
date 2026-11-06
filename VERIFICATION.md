@@ -36,8 +36,17 @@ and the published tag identify the released commit.
   0.6.2 helper. The complete public export matched a pre-upgrade SQLite backup and
   the original source file hash was unchanged. Private backups were made before
   and after adoption. No household details or private paths are included here.
-  This is authorized actual use, separate from synthetic development tests; a
-  clean live Antigravity reinstall remains pending.
+  This is authorized actual use, separate from synthetic development tests.
+- On 2026-11-06, the owner shared successful Antigravity uninstall/reinstall output
+  for v0.6.2 and the subsequent context response. Without a data-directory override,
+  it used the shared Windows default, returned the same physical database path and
+  profile ID recorded by Codex, and retrieved existing household/preferences with
+  onboarding completed. No JSON import or new household registration was needed.
+  The uninstall report also stated that the legacy database hash was unchanged.
+  These are owner-reported actual-use results, not independently captured
+  Antigravity process traces. Personal member details, IDs, hashes and machine paths
+  from the supplied output are deliberately excluded. Broader Antigravity meal
+  conversations and live cross-host writes are not established by this read check.
 - An additional extracted-package integration installs the real manager/helper
   for Codex and Antigravity under one temporary synthetic Windows user home,
   adopts a synthetic legacy profile, writes through one host and reads through
@@ -46,8 +55,8 @@ and the published tag identify the released commit.
 - The current 33-file ZIP includes the new discovery tests. Earlier
   0.6.1 evidence below remains scoped to that version; it does not certify the
   upgraded live-agent discovery flow. Development tests used only synthetic data;
-  the owner-authorized actual Codex upgrade is recorded separately above. Clean
-  live Antigravity reinstall acceptance is pending.
+  the owner-authorized actual Codex upgrade and owner-reported Antigravity clean
+  reinstall/shared-profile acceptance are recorded separately above.
 
 - Windows, Python **3.14.10**: **119/119 unittest tests passed** for the integrated import/reference update.
 - Windows, Python **3.12.10**: **119/119 unittest tests passed** for the integrated import/reference update.
@@ -184,8 +193,10 @@ excluded from this report, repository and release assets.
 This owner-authorized actual-use acceptance check is evidence for basic Codex use,
 not a synthetic development test or completion of the full acceptance suite
 or a controlled before/after reference-routing comparison. The exact desktop/model
-version for that live session was not captured. Fresh-chat automatic discovery,
-Antigravity conversations and remaining manual scenarios are still pending.
+version for that live session was not captured. Fresh-chat automatic skill
+invocation, broader Antigravity meal conversations and remaining manual scenarios
+are still pending; Antigravity default-profile retrieval after a clean reinstall
+is now covered by the owner-reported v0.6.2 evidence above.
 Automated development tests continue to use only synthetic temporary profiles.
 
 **Claude Code remains conversationally untested by the maintainers.** Its
@@ -201,9 +212,9 @@ each host. There is no claim that all agents discover or follow this skill.
 
 | Host | Local version observed | Actually tested | Not tested |
 |---|---|---|---|
-| Codex | Earlier CLI observation: `codex-cli 0.166.0-alpha.6`; live desktop/model version not captured | Synthetic storage/lifecycle checks; owner-confirmed live smoke test: explicit invocation, onboarding, saved-context reuse, ingredient-based recipe, scoped temporary dislike, future-meal exclusion from history, and preference removal. | Fresh-session automatic discovery, independently inspected live database traces, and the complete conversational acceptance suite. |
+| Codex | Earlier CLI observation: `codex-cli 0.166.0-alpha.6`; live desktop/model version not captured | Synthetic storage/lifecycle checks; owner-confirmed cooking/profile smoke test; owner-authorized v0.6.2 shared-storage upgrade with complete public-export/backup comparison and unchanged original source hash. | Fresh-session automatic skill invocation and the complete conversational acceptance suite. |
 | Claude Code | `2.1.159` | Version command; documented path mapping; install/update/uninstall and installed helper in a temporary synthetic project. | Live model session, automatic discovery, slash-command invocation, and conversational behavior. Current official docs may describe features newer than this local version. |
-| Antigravity CLI | `1.0.8` | Version command; documented path mapping; install/update/uninstall and installed helper in a temporary synthetic project. | Live CLI/App/IDE invocation, automatic discovery, and conversational behavior. |
+| Antigravity | Earlier CLI observation: `1.0.8`; actual-use host/model version not captured | Synthetic storage/lifecycle checks; owner-reported clean v0.6.2 uninstall/reinstall and default-profile retrieval matched Codex physical path/profile ID and recovered existing household/preferences with completed onboarding. | Automatic skill invocation, broader meal conversations, live cross-host writes, and independently captured Antigravity process traces. |
 | Custom agents | No specific host | Explicit-directory installation and execution of the shared JSON CLI in a temporary destination. | Host registration, model behavior, tool permissions, or compatibility with any arbitrary custom agent. |
 
 The owner explicitly authorized the personal Codex installation and live use
