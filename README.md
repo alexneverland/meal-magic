@@ -18,16 +18,17 @@ use covered breakfast suggestions and actual-meal records read back through Code
 
 ## See Meal Magic in action
 
-These short English GIFs summarize two Codex Desktop runs from the current source.
-Each used a separate synthetic profile and the Meal Magic storage helper.
+These English GIFs show two screen recordings of Codex Desktop running Meal Magic
+from source with separate synthetic profiles. Each shows the prompt and final
+response, with the wait between them cut.
 
 ### Suggest a dinner with more variety
 
 After reading yesterday's roast chicken and potatoes from history, Meal Magic
-suggests lemon chicken rice bowls with a different preparation. The suggestion
-leaves the saved profile unchanged.
+suggests lemon chicken and rice soup using the ingredients on hand. The suggestion
+leaves the meal history unchanged.
 
-![Meal Magic reads yesterday's roast chicken and suggests pan-seared lemon chicken and carrot rice bowls](docs/demos/meal-variety.gif)
+![Codex reads yesterday's roast chicken and suggests lemon chicken and rice soup](docs/demos/meal-variety.gif)
 
 ### Record what you cooked and ate
 
