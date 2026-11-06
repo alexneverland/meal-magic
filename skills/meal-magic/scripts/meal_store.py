@@ -18,7 +18,7 @@ from datetime import date, datetime, timezone
 from typing import Any
 from urllib.parse import quote
 
-VERSION = "0.6.2"
+VERSION = "0.6.3"
 KINDS = ("prefer", "avoid", "forbid", "allergy", "diet")
 AGE_GROUPS = ("unspecified", "infant", "young_child", "child", "teen", "adult", "older_adult")
 ALLERGY_STATUSES = ("unknown", "none_reported", "reported")
@@ -229,14 +229,12 @@ def profile_lock(directory: Path):
     checked_path(directory).mkdir(parents=True, exist_ok=True, mode=0o700)
     lock_path = checked_path(directory / ".startup.lock")
     with lock_path.open("a+b") as lock:
-        if lock.seek(0, 2) == 0:
-            lock.write(b"0")
-            lock.flush()
         deadline = time.monotonic() + 10
         if os.name == "nt":
             import msvcrt
             def acquire():
                 lock.seek(0)
+                # The lock can extend past EOF, so a new file needs no unlocked write.
                 msvcrt.locking(lock.fileno(), msvcrt.LK_NBLCK, 1)
             def release():
                 lock.seek(0)

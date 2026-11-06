@@ -1,11 +1,11 @@
 # Verification — updated 2026-11-06
 
-Version: **0.6.2**; release preparation authorized by the project owner.
+Version: **0.6.3**. Release preparation was authorized by the project owner.
 Work was performed without subagents.
 Review/merge state is recorded in the corresponding pull request. Release assets
 and the published tag identify the released commit.
 
-## Pending live verification on the current source
+## v0.6.3 recipe presentation and variety verification
 
 The recipe workflow now specifies a shared presentation for complete new and
 saved recipes. It uses a suitable native renderer when available, with Markdown
@@ -14,15 +14,24 @@ return literal content. The Python tests cover storage and exact retrieval.
 They cannot verify formatting quality, native card availability or whether a
 host model follows the fallback.
 
+The Markdown layout was demonstrated in Codex Desktop with a synthetic meal
+history. After the preview was installed in both hosts, the project owner
+reported that it worked in Antigravity. This report covers a smoke test.
+
 Use the [synthetic presentation scenarios](tests/agent-scenarios.md#recipe-presentation)
 in Codex and Antigravity to check the new layout, saved-text fidelity and
 available fallbacks on each surface. The README's earlier Codex dinner demo
-shows one variety decision. The expanded variety scenarios and new recipe
-presentation scenarios have yet to be run live on either host.
+shows one variety decision. The complete scenario sets and the rendering
+fallbacks still require verification on both hosts.
+
+The Windows startup lock uses the same byte range for both empty and existing
+lock files. It no longer needs to write a marker byte before locking. The
+automated suite covers an empty lock file and concurrent startup with a
+synthetic profile.
 
 ## Executed
 
-### Unreleased meal-variety instruction refinement
+### Earlier meal-variety instruction refinement
 
 The recipe/planning reference now makes variety a soft preference based on relevant
 diners' actual eaten history, overall dish, preparation and main ingredients.
