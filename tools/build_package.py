@@ -11,6 +11,7 @@ PUBLIC_FILES = (
     "README.md", "LICENSE", "VERIFICATION.md", "SECURITY.md", "CONTRIBUTING.md", "AGENTS.md",
     ".gitignore", ".gitattributes", ".github/PULL_REQUEST_TEMPLATE.md",
     ".github/dependabot.yml", ".github/workflows/ci.yml",
+    "docs/demos/meal-variety.gif", "docs/demos/actual-meal-history.gif",
     "skills/meal-magic/SKILL.md", "skills/meal-magic/VERSION", "skills/meal-magic/LICENSE",
     "skills/meal-magic/scripts/meal_store.py", "skills/meal-magic/references/storage-cli.md",
     "skills/meal-magic/references/household.md", "skills/meal-magic/references/occasions.md",

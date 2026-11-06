@@ -16,6 +16,26 @@ use covered breakfast suggestions and actual-meal records read back through Code
 
 **[Download the latest published release (ZIP and SHA-256 checksum)](https://github.com/alexneverland/meal-magic/releases/latest)** · [All releases](https://github.com/alexneverland/meal-magic/releases)
 
+## See Meal Magic in action
+
+These short English GIFs summarize two Codex Desktop runs from the current source.
+Each used a separate synthetic profile and the Meal Magic storage helper.
+
+### Suggest a dinner with more variety
+
+After reading yesterday's roast chicken and potatoes from history, Meal Magic
+suggests lemon chicken rice bowls with a different preparation. The suggestion
+leaves the saved profile unchanged.
+
+![Meal Magic reads yesterday's roast chicken and suggests pan-seared lemon chicken and carrot rice bowls](docs/demos/meal-variety.gif)
+
+### Record what you cooked and ate
+
+An explicit report of cooking and eating lemon chickpea rice creates two
+separate events. Both are read back from the saved history.
+
+![Meal Magic reads back separate cooked and eaten events for lemon chickpea rice](docs/demos/actual-meal-history.gif)
+
 ## Agent testing status
 
 At the owner's explicit request, v0.6.1 was installed for actual use in **Codex**:
