@@ -5,7 +5,7 @@ remember food preferences and restrictions, keep an actual meal history, and
 save recipes and favorites. One shared Python core works with Codex, Claude Code,
 Antigravity, and custom agents that can load instructions and execute local tools.
 
-**Version 0.6.2 — Windows profile discovery and shared storage.**
+**Version 0.6.3 — Recipe presentation and meal variety.**
 Basic live use of v0.6.1 in Codex was observed on
 2026-11-05 and confirmed working by the project owner. The new discovery behavior
 has synthetic automated coverage, an owner-authorized Codex storage upgrade with
@@ -75,6 +75,23 @@ problems with synthetic examples through [issues](https://github.com/alexneverla
 See [the acceptance scenarios](tests/agent-scenarios.md) and
 [reporting guidance](CONTRIBUTING.md#reporting-agent-behavior).
 
+## Recipe presentation
+
+Complete new recipes include a title, servings, estimated prep and cook times,
+difficulty, ingredient quantities, numbered steps and relevant tips. Saved
+recipes retain their original quantities and other details where provided. Where
+useful, a short note offers one ingredient swap and any cooking adjustment.
+Meal Magic uses a rich layout when the host can render the complete recipe,
+with Markdown or plain text as fallbacks. In Markdown, key cooking cues stand out
+in bold. On surfaces that display icons reliably,
+small icons make the section labels easier to spot. The same layout applies to
+generated and saved recipes. You can still ask for the exact saved text.
+
+The Markdown layout was demonstrated in Codex. The project owner reported that
+the updated layout worked in Antigravity. The
+[recipe presentation scenarios](tests/agent-scenarios.md#recipe-presentation)
+cover the remaining rendering and saved-recipe checks.
+
 ## What it remembers
 
 - Ongoing likes, dislikes, prohibited foods/ingredients, stated allergies, and
@@ -95,10 +112,12 @@ Suggestions remain conversation content; plans can be saved when requested.
 Neither suggestions nor saved plans are actual meal history.
 Saving, viewing, or favoriting a recipe never records it as cooked or eaten.
 Recently eaten dishes help the model offer meaningful variety across the overall
-dish, preparation and main ingredients. This is a soft preference: shared ingredients
-are allowed, as are explicit repeats and leftovers; no fixed waiting period or
-ingredient-category ban is imposed. Asking for another idea does not itself change
-stored preferences. History is not automatically deleted.
+dish, preparation and main ingredients. This is a soft preference, and shared
+ingredients can appear in different dishes. Explicit requests, available ingredients,
+leftovers, budget and dietary requirements take priority. When asked for another
+idea, the model offers a meaningfully different option where feasible. Variety
+uses neither a fixed waiting period nor ingredient bans. Asking for another
+idea leaves stored preferences intact. History is never automatically deleted.
 
 The model understands the conversation, including ingredient meaning and dietary
 constraints. The Python helper validates structured requests and stores data;
@@ -133,14 +152,13 @@ python tools/manage_skill.py install --agent codex
 ```
 
 Choose `--agent claude-code` or `--agent antigravity` instead of `codex` as needed.
-For the **fixed v0.6.2 release snapshot**, once its tag is published on the Releases
-page, check it out before testing
-or installing:
+For the **fixed v0.6.3 release snapshot**, check out its tag before testing or
+installing:
 
 ```text
 git clone https://github.com/alexneverland/meal-magic.git
 cd meal-magic
-git checkout v0.6.2
+git checkout v0.6.3
 python tools/check_repository.py
 python -m unittest discover -s tests -v
 python tools/manage_skill.py install --agent codex
@@ -171,7 +189,7 @@ To build a local review archive (without publishing anything):
 python tools/build_package.py
 ```
 
-This writes `dist/meal-magic-0.6.2.zip` and a SHA-256 sidecar. Packaging uses an
+This writes `dist/meal-magic-0.6.3.zip` and a SHA-256 sidecar. Packaging uses an
 explicit source-file allowlist, so databases, caches, personal settings, and
 untracked files cannot enter the archive through directory scanning.
 

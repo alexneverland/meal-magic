@@ -405,6 +405,11 @@ with m.profile_lock(pathlib.Path(sys.argv[2])): os._exit(0)
             self.assertEqual(self.call()["result"]["household"]["members"][0]["label"],
                              "Committed WAL synthetic member")
 
+    @unittest.skipUnless(os.name == "nt", "Windows byte-range lock")
+    def test_profile_lock_can_lock_an_empty_file_without_writing(self):
+        with module.profile_lock(self.target):
+            self.assertEqual((self.target / ".startup.lock").stat().st_size, 0)
+
     def test_parallel_process_startup_adopts_once_and_keeps_all_writes(self):
         self.seed(self.private, "Original synthetic member")
         program = """
