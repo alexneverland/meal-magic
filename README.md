@@ -1,9 +1,8 @@
 # Meal Magic
 
-A portable cooking skill that uses **your agent's model** to suggest meals,
-remember food preferences and restrictions, keep an actual meal history, and
-save recipes and favorites. One shared Python core works with Codex, Claude Code,
-Antigravity, and custom agents that can load instructions and execute local tools.
+A local-first cooking skill for AI agents. Get step-by-step recipes, plan meals,
+and remember what you cooked and ate. Your agent writes the recipes, while a shared
+Python helper stores preferences, favorites and meal history on your computer.
 
 **Version 0.6.3 — Recipe presentation and meal variety.**
 Basic live use of v0.6.1 in Codex was observed on
@@ -18,24 +17,25 @@ use covered breakfast suggestions and actual-meal records read back through Code
 
 ## See Meal Magic in action
 
-These English GIFs show two screen recordings of Codex Desktop running Meal Magic
-from source with separate synthetic profiles. Each shows the prompt and final
-response, with the wait between them cut.
+These Codex Desktop screenshots show Meal Magic v0.6.3 with separate synthetic
+profiles. Each includes the original question and the answer.
 
-### Suggest a dinner with more variety
+### Get a recipe you can cook from
 
-After reading yesterday's roast chicken and potatoes from history, Meal Magic
-suggests lemon chicken and rice soup using the ingredients on hand. The suggestion
-leaves the meal history unchanged.
+Ask for dinner with the ingredients you have. This example shows quantities,
+numbered steps, a cooking tip and one ingredient swap.
 
-![Codex reads yesterday's roast chicken and suggests lemon chicken and rice soup](docs/demos/meal-variety.gif)
+![A Codex chat shows the dinner request and a complete lemon chickpea and carrot rice recipe for two, including an ingredient swap](docs/demos/recipe-presentation.png)
 
-### Record what you cooked and ate
+### Ask what you ate this week
 
-An explicit report of cooking and eating lemon chickpea rice creates two
-separate events. Both are read back from the saved history.
+Meal Magic reads the saved history and groups meals by day. A dish logged only
+as cooked is shown separately from the meals you reported eating.
 
-![Meal Magic reads back separate cooked and eaten events for lemon chickpea rice](docs/demos/actual-meal-history.gif)
+![A Codex chat lists three eaten meals by day and notes that Friday's pasta was logged only as cooked](docs/demos/weekly-meal-history.png)
+
+Earlier demos show [variety based on a previous dinner](docs/demos/meal-variety.gif)
+and [logging separate cooked and eaten events](docs/demos/actual-meal-history.gif).
 
 ## Agent testing status
 
