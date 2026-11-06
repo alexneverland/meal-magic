@@ -6,8 +6,21 @@ Read before suggesting or generating recipes, using the recipe library, or plann
 
 Use available ingredients, current preferences, practical time/serving constraints,
 and actual recent meals to offer a few useful options. Distinguish ingredients
-already available from any extras needed. Use history for variety, not a rigid
-ban on repeats; leftovers and requested repeats are valid. Ingredients supplied for
+already available from any extras needed.
+
+For variety, consider the relevant diners' recently eaten dishes and favor meaningful
+differences in the overall dish, preparation method and main ingredients when
+reasonable alternatives fit. A cooked-only event does not prove consumption.
+Changing only a side or garnish may still leave a nearly identical meal; shared
+ingredients alone do not make different dishes repetitive. Judge the actual dish
+and preparation where known, not its name alone. Variety is a soft preference,
+never a restriction, fixed waiting period or ingredient-category ban. Keep all
+applicable dietary restrictions, and respect explicit repeat requests, leftovers,
+available ingredients and practical constraints. When the user asks for another
+suggestion, offer a materially different option when feasible within those
+constraints; that request alone does not create a permanent dislike or preference.
+
+Ingredients supplied for
 a recipe are temporary conversation context, not a persistent inventory. Do not
 save an ingredient list as preferences, notes or a plan merely to remember stock.
 There is no pantry storage, quantity tracking or expiry tracking in this version.

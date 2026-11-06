@@ -75,7 +75,22 @@ Record host version, model, installation scope, exact synthetic prompt, tool JSO
 requests/results, database observations, final response, and pass/fail. If a model
 was not actually run, record "not tested", not "compatible". No evaluation requires
 changing personal settings or launching subagents.
-# Windows first-use shared discovery (0.6.2)
+## Soft meal variety (unreleased instruction refinement)
+
+These five additional conversational scenarios are **not yet executed with live
+models**. Use separate disposable synthetic profiles and explicitly seed the
+reported eaten/cooked events. Assess the reasoning and stored state, not a fixed
+expected dish name. Dietary restrictions always remain in force.
+
+| Synthetic context / user messages | Observable pass criteria |
+|---|---|
+| Yesterday's actual eaten meal was roast chicken with potatoes. Ask for another dinner; consider roast chicken with rice as a candidate. | Recognizes that changing only the side may leave a near-duplicate; favors a meaningfully different suitable dish when alternatives exist. Does not ban chicken, invent a fixed cooldown or change preferences. |
+| Compare roast chicken followed by chicken soup, and lentils followed by lemon chickpeas, with both recent meals explicitly reported eaten. | Can recognize different dish forms/preparations despite shared ingredients or food categories. Does not reject soup merely because it contains chicken or chickpeas merely because lentils were eaten. These are contextual examples, not mandatory recipe choices. |
+| Actual eaten history contains pasta with minced beef. Ask whether pasta with beef would be different enough; the sauce/preparation is not specified. | Does not decide from the names alone that the meals are universally different, acceptable or forbidden. Explains the dependence on the actual dish, or offers a clearly different option without imposing an unnecessary questionnaire. |
+| Recently ate roast chicken. "Use my leftover roast chicken and rice for dinner; that's what I have." Then explicitly ask to repeat the previous dish instead. | Uses the declared leftovers/ingredients and respects the explicit repeat despite soft variety. Does not infer other pantry stock, remove restrictions, change preferences or record actual consumption from these requests. |
+| A suggestion fits the declared diners and restrictions. "Something else, please." For the follow-up, synthetic Adult 1 has a recent eaten event while Adult 2 has only a cooked event; request a meal for Adult 2. | Offers a materially different suitable option where feasible, rather than only renaming the dish or changing a garnish. Does not save a permanent dislike from the request, transfer Adult 1's consumption to Adult 2, or treat cooked-only history as proof of eating. No actual event is added. |
+
+## Windows first-use shared discovery (0.6.2)
 
 Use temporary synthetic homes/profile directories only. Update both temporary
 host installs. Seed a legacy profile in one known native/MSIX location, then start

@@ -7,6 +7,24 @@ and the published tag identify the released commit.
 
 ## Executed
 
+### Unreleased meal-variety instruction refinement
+
+The recipe/planning reference now makes variety a soft preference based on relevant
+diners' actual eaten history, overall dish, preparation and main ingredients.
+Shared ingredients, explicit repeats, leftovers and practical constraints remain
+valid; there is no fixed cooldown, ingredient ban or new persistent preference
+from asking for another idea. Storage code/schema and the released v0.6.2 assets
+are unchanged. Five synthetic conversational scenarios were added to the manual
+protocol. **Those new live-model scenarios have not been executed**; existing
+storage tests or earlier owner use do not establish that the model follows this
+refined guidance. Installed personal skills/data were not used for this change.
+The repository checker and `git diff --check` passed; the unchanged storage suite
+ran 159 tests (158 passed, one conditional MSIX probe skipped). A temporary preview
+ZIP matched all 33 allowlisted source files, CRCs and its SHA-256 sidecar, then was
+removed. Published release archives were not rebuilt or replaced.
+
+### Existing storage and actual-use evidence
+
 - Current Windows release candidate: Python **3.14.10** and **3.12.10** each completed
   **159 unittest tests: 158 passed, 1 conditional MSIX probe skipped**, no failures.
   Repository validation and `git diff --check` passed. The 0.6.2 ZIP has the exact

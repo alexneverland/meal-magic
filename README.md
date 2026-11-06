@@ -73,8 +73,11 @@ See [the acceptance scenarios](tests/agent-scenarios.md) and
 Suggestions remain conversation content; plans can be saved when requested.
 Neither suggestions nor saved plans are actual meal history.
 Saving, viewing, or favoriting a recipe never records it as cooked or eaten.
-Recent actual meals help the model offer variety while allowing requested repeats
-and leftovers. History is not automatically deleted.
+Recently eaten dishes help the model offer meaningful variety across the overall
+dish, preparation and main ingredients. This is a soft preference: shared ingredients
+are allowed, as are explicit repeats and leftovers; no fixed waiting period or
+ingredient-category ban is imposed. Asking for another idea does not itself change
+stored preferences. History is not automatically deleted.
 
 The model understands the conversation, including ingredient meaning and dietary
 constraints. The Python helper validates structured requests and stores data;
