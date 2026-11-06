@@ -1,4 +1,4 @@
-# Verification — 2026-11-05
+# Verification — updated 2026-11-06
 
 Version: **0.6.2**; release preparation authorized by the project owner.
 Work was performed without subagents.
@@ -43,10 +43,25 @@ and the published tag identify the released commit.
   profile ID recorded by Codex, and retrieved existing household/preferences with
   onboarding completed. No JSON import or new household registration was needed.
   The uninstall report also stated that the legacy database hash was unchanged.
-  These are owner-reported actual-use results, not independently captured
-  Antigravity process traces. Personal member details, IDs, hashes and machine paths
-  from the supplied output are deliberately excluded. Broader Antigravity meal
-  conversations and live cross-host writes are not established by this read check.
+  These are owner-reported, explicitly authorized normal-use observations, separate
+  from development testing; personal records were not fixtures for any automated
+  test. Antigravity process traces were not independently captured. Personal member
+  details, IDs, hashes and machine paths from the supplied output are excluded.
+- Subsequent owner-authorized actual use on 2026-11-06 covered Antigravity quick
+  breakfast suggestions and a follow-up preparation tip. Before the owner reported
+  actual completion, Codex called the installed helper against the shared profile:
+  both context and the actual-meal listing returned no events. An expression of
+  future intent had therefore not added an actual meal to the observed history.
+  After the owner explicitly reported cooking and eating, Antigravity acknowledged
+  both. Codex then independently read the persisted shared state through the helper:
+  exactly two events, one `cooked` and one `eaten`, on the correct local calendar
+  date, both linked only to the reported member. This checks Antigravity-to-Codex
+  write/read visibility and the observed intent/completion distinction. It does
+  not independently audit Antigravity's tool-call trace, prove all retry/concurrency
+  paths or validate every recipe/nutrition claim. No personal meal text or member
+  identifiers from the actual-use report are committed. These observations were
+  explicitly requested by the owner as normal use; all development tests continue
+  to use temporary synthetic profiles only.
 - An additional extracted-package integration installs the real manager/helper
   for Codex and Antigravity under one temporary synthetic Windows user home,
   adopts a synthetic legacy profile, writes through one host and reads through
@@ -56,7 +71,7 @@ and the published tag identify the released commit.
   0.6.1 evidence below remains scoped to that version; it does not certify the
   upgraded live-agent discovery flow. Development tests used only synthetic data;
   the owner-authorized actual Codex upgrade and owner-reported Antigravity clean
-  reinstall/shared-profile acceptance are recorded separately above.
+  reinstall/shared-profile normal-use observations are recorded separately above.
 
 - Windows, Python **3.14.10**: **119/119 unittest tests passed** for the integrated import/reference update.
 - Windows, Python **3.12.10**: **119/119 unittest tests passed** for the integrated import/reference update.
@@ -194,9 +209,10 @@ This owner-authorized actual-use acceptance check is evidence for basic Codex us
 not a synthetic development test or completion of the full acceptance suite
 or a controlled before/after reference-routing comparison. The exact desktop/model
 version for that live session was not captured. Fresh-chat automatic skill
-invocation, broader Antigravity meal conversations and remaining manual scenarios
-are still pending; Antigravity default-profile retrieval after a clean reinstall
-is now covered by the owner-reported v0.6.2 evidence above.
+invocation and remaining full-suite manual scenarios are still pending. Antigravity
+default-profile retrieval after a clean reinstall, a basic breakfast conversation,
+and actual cooked/eaten writes visible through Codex are covered by the separately
+scoped normal-use observations above.
 Automated development tests continue to use only synthetic temporary profiles.
 
 **Claude Code remains conversationally untested by the maintainers.** Its
@@ -214,7 +230,7 @@ each host. There is no claim that all agents discover or follow this skill.
 |---|---|---|---|
 | Codex | Earlier CLI observation: `codex-cli 0.166.0-alpha.6`; live desktop/model version not captured | Synthetic storage/lifecycle checks; owner-confirmed cooking/profile smoke test; owner-authorized v0.6.2 shared-storage upgrade with complete public-export/backup comparison and unchanged original source hash. | Fresh-session automatic skill invocation and the complete conversational acceptance suite. |
 | Claude Code | `2.1.159` | Version command; documented path mapping; install/update/uninstall and installed helper in a temporary synthetic project. | Live model session, automatic discovery, slash-command invocation, and conversational behavior. Current official docs may describe features newer than this local version. |
-| Antigravity | Earlier CLI observation: `1.0.8`; actual-use host/model version not captured | Synthetic storage/lifecycle checks; owner-reported clean v0.6.2 uninstall/reinstall and default-profile retrieval matched Codex physical path/profile ID and recovered existing household/preferences with completed onboarding. | Automatic skill invocation, broader meal conversations, live cross-host writes, and independently captured Antigravity process traces. |
+| Antigravity | Earlier CLI observation: `1.0.8`; actual-use host/model version not captured | Synthetic storage/lifecycle checks; owner-authorized clean v0.6.2 reinstall and shared-profile retrieval; breakfast suggestions/follow-up; actual-history empty before completion, followed by separate correctly dated/member-scoped cooked/eaten events independently read through Codex. | Automatic skill invocation, the full conversation suite, simultaneous live-host writes, and independently captured Antigravity process traces. |
 | Custom agents | No specific host | Explicit-directory installation and execution of the shared JSON CLI in a temporary destination. | Host registration, model behavior, tool permissions, or compatibility with any arbitrary custom agent. |
 
 The owner explicitly authorized the personal Codex installation and live use
