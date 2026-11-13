@@ -986,7 +986,7 @@ class Store:
         result = {
             "household": self._household(con),
             "preferences": [dict(r) for r in con.execute("SELECT * FROM preferences ORDER BY id")],
-            "recent_meals": self._meal_list(con, req),
+            "recent_meals": self._meal_list(con, {"limit": req["limit"]} if "limit" in req else {}),
         }
         if "on" in req:
             requested_date = date_field(req, "on")

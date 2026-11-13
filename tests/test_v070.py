@@ -465,6 +465,12 @@ class V070Tests(unittest.TestCase):
         meal_store.write_origins(origins_path, payload)
         self.assertEqual(meal_store.read_origins(origins_path), payload)
 
+    def test_context_with_on_date_does_not_filter_recent_meals(self):
+        logged = self.call("meal-log", request_key="ctx-m1", kind="eaten", name="Lentil Soup", occurred_on="2026-11-12")
+        ctx = self.call("context", on="2026-11-13")
+        self.assertEqual(ctx["date_context"]["on"], "2026-11-13")
+        self.assertEqual([m["id"] for m in ctx["recent_meals"]], [logged["id"]])
+
 
 if __name__ == "__main__":
     unittest.main()

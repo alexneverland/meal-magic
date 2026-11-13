@@ -332,7 +332,7 @@ clients and copy the whole data directory.
 
 Request: `{"action":"import","request_key":"new-opaque-key","data":<export result object>}`.
 `data` is the `result` of a successful export, not its outer `{ok,result}` envelope.
-Only exported schema versions 6 and 7 are accepted; other versions fail with
+Only exported schema versions 6, 7, and 8 are accepted; other versions fail with
 `unsupported_import_schema`. Re-export an older profile with a current helper on
 an authorized copy if necessary; do not hand-edit its schema number.
 
@@ -500,7 +500,7 @@ Synthetic create request (one-day excerpt; extend `meals` for a whole week):
 Use `import` only for a user-requested restore/transfer of a Meal Magic export
 into an explicitly selected empty profile. Read the import contract in the CLI
 reference. Put the export's `result` object in `data`, with a fresh `request_key`;
-do not pass the entire `{ok,result}` response envelope. Accept schema 6 or 7 only.
+do not pass the entire `{ok,result}` response envelope. Accept schema 6, 7, or 8 only.
 Use the exact same key/data when retrying. A successful retry is a historical
 receipt and must not be interpreted as reapplying the snapshot or undoing later edits.
 
