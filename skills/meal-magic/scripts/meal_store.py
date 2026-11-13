@@ -1431,6 +1431,12 @@ class Store:
                     continue
                 if on_conflict == "overwrite":
                     overwritten_count += 1
+                    old_rec = existing_by_id[target_id]
+                    old_sig = (normalized(old_rec["name"]), normalized(old_rec["content"]))
+                    if existing_content_sigs.get(old_sig) == target_id:
+                        existing_content_sigs.pop(old_sig, None)
+                    existing_by_id[target_id] = {"id": target_id, "name": item["name"], "content": item["content"]}
+                    existing_content_sigs[sig] = target_id
                     if not dry_run:
                         search_text = self._recipe_search_text(item["name"], item["content"], item["tags"])
                         con.execute(

@@ -1,6 +1,7 @@
 """Comprehensive tests for Meal Magic v0.7.0 features, migrations, and invariants."""
 from contextlib import closing
 import json
+import os
 from pathlib import Path
 import sqlite3
 import sys
@@ -249,6 +250,7 @@ class V070Tests(unittest.TestCase):
         self.assertEqual(meals[0]["id"], meal["id"])
         self.assertEqual(meals[0]["deleted_recipe"]["name"], "Μουσακάς")
 
+    @unittest.skipUnless(os.name == "nt", "Windows shared-profile discovery")
     def test_windows_shared_profile_fast_path_and_invalidation(self):
         legacy_dir = Path(self.tmp.name) / "legacy"
         meal_store.Store(legacy_dir).handle({
@@ -340,6 +342,7 @@ class V070Tests(unittest.TestCase):
         self.assertEqual(ctx["recent_meals"][0]["id"], meal["id"])
         self.assertEqual(ctx["recent_meals"][0]["member_ids"], [member["id"]])
 
+    @unittest.skipUnless(os.name == "nt", "Windows shared-profile discovery")
     def test_windows_wal_sidecar_change_invalidates_fast_path(self):
         legacy_dir = Path(self.tmp.name) / "legacy_wal"
         meal_store.Store(legacy_dir).handle({"action": "member-set", "label": "WAL Member"})
@@ -385,6 +388,31 @@ class V070Tests(unittest.TestCase):
         self.assertEqual(got["name"], "Pasta v2")
         self.assertTrue(got["favorite"])
         self.assertEqual(self.call("meal-list")[0]["recipe_id"], meal["recipe_id"])
+
+        # Overwriting recipe A to "New Soup" and then importing recipe B with identical content
+        # must report duplicate_matches accurately in both dry_run and actual import.
+        batch = [
+            {**rec, "name": "New Soup", "content": "Fresh broth.", "tags": []},
+            {"name": "New Soup", "content": "Fresh broth.", "tags": []},
+        ]
+        dry_dup = self.call(
+            "recipe-import",
+            request_key="ow-dup-dry",
+            dry_run=True,
+            on_conflict="overwrite",
+            confirm_overwrite=True,
+            recipes=batch,
+        )
+        self.assertEqual(len(dry_dup["duplicate_matches"]), 1)
+        self.assertEqual(dry_dup["duplicate_matches"][0]["existing_id"], rec["id"])
+        real_dup = self.call(
+            "recipe-import",
+            request_key="ow-dup-real",
+            on_conflict="overwrite",
+            confirm_overwrite=True,
+            recipes=batch,
+        )
+        self.assertEqual(real_dup["duplicate_matches"], dry_dup["duplicate_matches"])
 
 
 if __name__ == "__main__":
