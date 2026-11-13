@@ -333,6 +333,9 @@ class V070Tests(unittest.TestCase):
 
         with closing(sqlite3.connect(self.store.path)) as con:
             self.assertEqual(con.execute("PRAGMA user_version").fetchone()[0], 7)
+            self.assertIsNone(con.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='recipe_requests'").fetchone())
+            self.assertNotIn("search_text", {r[1] for r in con.execute("PRAGMA table_info(recipes)").fetchall()})
+            self.assertNotIn("recipe_snapshot", {r[1] for r in con.execute("PRAGMA table_info(meals)").fetchall()})
             self.assertEqual(con.execute("SELECT count(*) FROM recipes").fetchone()[0], 1)
             self.assertEqual(con.execute("SELECT count(*) FROM meals").fetchone()[0], 1)
             self.assertEqual(con.execute("SELECT count(*) FROM meal_members").fetchone()[0], 1)
@@ -341,6 +344,8 @@ class V070Tests(unittest.TestCase):
         ctx = self.call("context")
         self.assertEqual(ctx["recent_meals"][0]["id"], meal["id"])
         self.assertEqual(ctx["recent_meals"][0]["member_ids"], [member["id"]])
+        found = self.call("recipe-search", query="bean")
+        self.assertEqual([r["id"] for r in found], [rec["id"]])
 
     @unittest.skipUnless(os.name == "nt", "Windows shared-profile discovery")
     def test_windows_wal_sidecar_change_invalidates_fast_path(self):
@@ -353,13 +358,19 @@ class V070Tests(unittest.TestCase):
             s = meal_store.Store()
             s.shared_windows = True
             s.handle({"action": "context"})
-            # Simulate a WAL-mode write on the legacy DB without closing/checkpointing
-            with closing(sqlite3.connect(legacy_db)) as con:
+            # Simulate a WAL-mode write on the legacy DB while keeping the connection open so the WAL stays uncheckpointed.
+            con = sqlite3.connect(legacy_db)
+            try:
                 con.execute("PRAGMA journal_mode=WAL")
+                con.execute("PRAGMA wal_autocheckpoint=0")
                 con.execute("INSERT INTO preferences VALUES ('wal-p1','prefer','garlic','','2026-11-10',NULL)")
                 con.commit()
-            with self.assertRaisesRegex(meal_store.StoreError, "legacy_profile_changed_after_adoption"):
-                s.handle({"action": "context"})
+                wal_path = legacy_db.with_name("meal-magic.sqlite3-wal")
+                self.assertTrue(wal_path.exists() and wal_path.stat().st_size > 0)
+                with self.assertRaisesRegex(meal_store.StoreError, "legacy_profile_changed_after_adoption"):
+                    s.handle({"action": "context"})
+            finally:
+                con.close()
 
     def test_recipe_import_overwrite_and_idempotent_retry(self):
         rec = self.call("recipe-save", request_key="ow-1", name="Pasta", content="Old content.")
@@ -413,6 +424,46 @@ class V070Tests(unittest.TestCase):
             recipes=batch,
         )
         self.assertEqual(real_dup["duplicate_matches"], dry_dup["duplicate_matches"])
+
+    def test_recipe_import_empty_and_request_key_namespace(self):
+        empty_res = self.call("recipe-import", request_key="shared-imp-k1", recipes=[])
+        self.assertEqual(empty_res["imported"], 0)
+        # Empty recipe-import must not mark the profile occupied or collide with full-profile import.
+        snap = meal_store.Store(Path(self.tmp.name) / "src").handle({"action": "export"})["result"]
+        imp_res = self.call("import", request_key="shared-imp-k1", data=snap)
+        self.assertTrue(imp_res["imported"])
+        # Reusing the same request_key for a subsequent recipe-import also stays isolated.
+        rec_res = self.call(
+            "recipe-import",
+            request_key="shared-imp-k1",
+            recipes=[{"name": "Isolated Soup", "content": "Water and herbs.", "tags": []}],
+        )
+        self.assertEqual(rec_res["imported"], 1)
+
+    def test_read_origins_allows_negative_mtime_ns(self):
+        origins_path = Path(self.tmp.name) / "origins_neg" / "origins.json"
+        origins_path.parent.mkdir(parents=True, exist_ok=True)
+        payload = {
+            "schema": 1,
+            "profile_id": "a" * 32,
+            "sources": {},
+            "state": "ready",
+            "database_identity": None,
+            "selected_source": None,
+            "source_stats": {
+                "legacy": {
+                    "dev": 1,
+                    "ino": 2,
+                    "size": 128,
+                    "mtime_ns": -1000,
+                    "wal_exists": False,
+                    "wal_size": 0,
+                    "wal_mtime_ns": -1,
+                }
+            },
+        }
+        meal_store.write_origins(origins_path, payload)
+        self.assertEqual(meal_store.read_origins(origins_path), payload)
 
 
 if __name__ == "__main__":

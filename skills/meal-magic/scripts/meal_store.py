@@ -338,7 +338,8 @@ def read_origins(marker: Path) -> dict | None:
             if not isinstance(stats, dict) or any(
                 not isinstance(k, str) or not isinstance(v, dict) or set(v) != stat_keys or
                 type(v["wal_exists"]) is not bool or
-                any(type(v[n]) is not int or v[n] < 0 for n in ("dev", "ino", "size", "mtime_ns", "wal_size", "wal_mtime_ns"))
+                any(type(v[n]) is not int for n in ("mtime_ns", "wal_mtime_ns")) or
+                any(type(v[n]) is not int or v[n] < 0 for n in ("dev", "ino", "size", "wal_size"))
                 for k, v in stats.items()
             ):
                 raise ValueError
@@ -1355,11 +1356,10 @@ class Store:
         if len(encoded) > 20 * 1024 * 1024:
             raise StoreError("invalid_import_size")
         digest = hashlib.sha256(encoded).hexdigest()
+        receipt_payload = {"action": "recipe-import", "digest": digest}
         if not dry_run:
-            previous = con.execute("SELECT * FROM import_requests WHERE request_key=?", (key,)).fetchone()
+            previous = self._replayed(con, "recipe_requests", key, receipt_payload)
             if previous:
-                if previous["snapshot_hash"] != digest:
-                    raise StoreError("request_key_conflict")
                 return json.loads(previous["response"])
 
         # Validate every incoming recipe strictly before mutating anything.
@@ -1473,8 +1473,8 @@ class Store:
             "conflicts": conflicts,
             "duplicate_matches": duplicate_matches,
         }
-        if not dry_run:
-            con.execute("INSERT INTO import_requests VALUES (?,?,?)", (key, digest, json.dumps(result)))
+        if not dry_run and normalized_items:
+            self._record_recipe_receipt(con, key, receipt_payload, result)
         return result
 
     def _recipe_get(self, con: sqlite3.Connection, req: dict) -> dict:
@@ -1593,25 +1593,27 @@ class Store:
                 raise StoreError("member_not_found")
 
         if member_id is not None:
-            rows = con.execute(
+            cursor = con.execute(
                 "SELECT m.kind, m.name, m.occurred_on, m.recipe_id, m.recipe_snapshot "
                 "FROM meal_members mm JOIN meals m ON m.id=mm.meal_id "
                 "WHERE mm.member_id=? AND (? IS NULL OR m.occurred_on>=?) AND (? IS NULL OR m.occurred_on<=?) "
                 "ORDER BY m.occurred_on DESC, m.id",
                 (member_id, from_d, from_d, to_d, to_d),
-            ).fetchall()
+            )
         else:
-            rows = con.execute(
+            cursor = con.execute(
                 "SELECT kind, name, occurred_on, recipe_id, recipe_snapshot FROM meals "
                 "WHERE (? IS NULL OR occurred_on>=?) AND (? IS NULL OR occurred_on<=?) "
                 "ORDER BY occurred_on DESC, id",
                 (from_d, from_d, to_d, to_d),
-            ).fetchall()
+            )
 
+        logged_events = 0
         total_cooked = 0
         total_eaten = 0
         dishes: dict[str, dict[str, Any]] = {}
-        for row in rows:
+        for row in cursor:
+            logged_events += 1
             kind = row["kind"]
             if kind == "cooked":
                 total_cooked += 1
@@ -1673,7 +1675,7 @@ class Store:
             "period": {"from_date": from_d, "to_date": to_d},
             "member_id": member_id,
             "totals": {
-                "logged_events": len(rows),
+                "logged_events": logged_events,
                 "cooked": total_cooked,
                 "eaten": total_eaten,
                 "distinct_dishes": len(dish_list),
