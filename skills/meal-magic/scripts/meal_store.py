@@ -14,11 +14,11 @@ import tempfile
 import time
 import unicodedata
 import uuid
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from typing import Any
 from urllib.parse import quote
 
-VERSION = "0.6.3"
+VERSION = "0.7.0"
 KINDS = ("prefer", "avoid", "forbid", "allergy", "diet")
 AGE_GROUPS = ("unspecified", "infant", "young_child", "child", "teen", "adult", "older_adult")
 ALLERGY_STATUSES = ("unknown", "none_reported", "reported")
@@ -33,6 +33,7 @@ PROFILE_PRESENCE_QUERIES = {
     "meal_members": "SELECT 1 FROM meal_members LIMIT 1",
     "meal_requests": "SELECT 1 FROM meal_requests LIMIT 1",
     "import_requests": "SELECT 1 FROM import_requests LIMIT 1",
+    "recipe_requests": "SELECT 1 FROM recipe_requests LIMIT 1",
 }
 PROFILE_COUNT_QUERIES = {
     "members": "SELECT count(*) FROM members",
@@ -197,7 +198,9 @@ def profile_snapshot(path: Path) -> tuple[sqlite3.Connection, bool, str]:
             expected |= {"meal_requests"}
         if version >= 7:
             expected |= {"import_requests"}
-        if version not in range(1, 8) or tables != expected:
+        if version >= 8:
+            expected |= {"recipe_requests"}
+        if version not in range(1, 9) or tables != expected:
             raise StoreError("unrecognized_legacy_profile")
         if memory.execute("PRAGMA quick_check").fetchall() != [("ok",)]:
             raise StoreError("invalid_legacy_profile")
@@ -283,6 +286,31 @@ def discover_profiles(target: Path) -> list[Path]:
     return found
 
 
+def _source_stat(path: Path) -> dict[str, Any]:
+    """Capture OS identity, size, mtime, and WAL sidecar state for fast-path change detection."""
+    info = path.stat()
+    wal = path.with_name(path.name + "-wal")
+    wal_exists = wal.is_file()
+    wal_info = wal.stat() if wal_exists else None
+    return {
+        "dev": info.st_dev,
+        "ino": info.st_ino,
+        "size": info.st_size,
+        "mtime_ns": info.st_mtime_ns,
+        "wal_exists": wal_exists,
+        "wal_size": wal_info.st_size if wal_info else 0,
+        "wal_mtime_ns": wal_info.st_mtime_ns if wal_info else 0,
+    }
+
+
+def _valid_sqlite_header(path: Path) -> bool:
+    try:
+        with path.open("rb") as handle:
+            return handle.read(16) == b"SQLite format 3\x00"
+    except OSError:
+        return False
+
+
 def read_origins(marker: Path) -> dict | None:
     if not marker.exists():
         return None
@@ -291,8 +319,10 @@ def read_origins(marker: Path) -> dict | None:
         def hex_string(value, length):
             return isinstance(value, str) and len(value) == length and all(c in "0123456789abcdef" for c in value)
         identity = data.get("database_identity") if isinstance(data, dict) else None
-        if (not isinstance(data, dict) or set(data) != {"schema", "profile_id", "sources", "state",
-                                                      "database_identity", "selected_source"} or
+        allowed_keys = {"schema", "profile_id", "sources", "state", "database_identity", "selected_source"}
+        extra_keys = {"source_stats"}
+        if (not isinstance(data, dict) or not allowed_keys <= set(data) or
+                set(data) - allowed_keys - extra_keys or
                 type(data["schema"]) is not int or data["schema"] != 1 or
                 not hex_string(data["profile_id"], 32) or not isinstance(data["sources"], dict) or
                 data["state"] not in ("publishing", "ready") or
@@ -302,6 +332,16 @@ def read_origins(marker: Path) -> dict | None:
                 (identity is not None and (not isinstance(identity, list) or len(identity) != 2 or
                                           any(type(v) is not int or v < 0 for v in identity)))):
             raise ValueError
+        if "source_stats" in data:
+            stats = data["source_stats"]
+            stat_keys = {"dev", "ino", "size", "mtime_ns", "wal_exists", "wal_size", "wal_mtime_ns"}
+            if not isinstance(stats, dict) or any(
+                not isinstance(k, str) or not isinstance(v, dict) or set(v) != stat_keys or
+                type(v["wal_exists"]) is not bool or
+                any(type(v[n]) is not int or v[n] < 0 for n in ("dev", "ino", "size", "mtime_ns", "wal_size", "wal_mtime_ns"))
+                for k, v in stats.items()
+            ):
+                raise ValueError
         return data
     except (ValueError, UnicodeError):
         raise StoreError("invalid_profile_origins") from None
@@ -328,6 +368,19 @@ def prepare_shared_profile(target: Path, selected_database: str | None = None) -
     marker = checked_path(target.parent / ".origins.json")
     paths = discover_profiles(target)
     origins = read_origins(marker)
+    # Fast path for already-ready shared profiles when target identity, SQLite header,
+    # discovered legacy set, and legacy file/WAL stats all match the last verified state.
+    if (selected_database is None and origins is not None and origins["state"] == "ready"
+            and target.is_file() and "source_stats" in origins):
+        info = target.stat()
+        if (origins.get("database_identity") == [info.st_dev, info.st_ino]
+                and _valid_sqlite_header(target)):
+            cached_stats = origins["source_stats"]
+            discovered_keys = {profile_key(p) for p in paths}
+            if (discovered_keys == set(origins["sources"])
+                    and discovered_keys == set(cached_stats)
+                    and all(_source_stat(p) == cached_stats[profile_key(p)] for p in paths)):
+                return
     # Stored paths are descriptive only. Never use this JSON to authorize reads
     # outside the exact legacy locations independently discovered above.
     snapshots, source_locks = [], []
@@ -351,6 +404,7 @@ def prepare_shared_profile(target: Path, selected_database: str | None = None) -
             con.execute("BEGIN IMMEDIATE")
             snapshot, meaningful, fingerprint = profile_snapshot(path)
             snapshots.append((path, snapshot, meaningful, fingerprint))
+        current_stats = {profile_key(item[0]): _source_stat(item[0]) for item in snapshots}
         if origins is not None and target.exists():
             if selected_database is not None:
                 chosen = origins.get("selected_source")
@@ -360,8 +414,9 @@ def prepare_shared_profile(target: Path, selected_database: str | None = None) -
                 old = origins["sources"].get(profile_key(path))
                 if old is not None and old != fingerprint or old is None and meaningful:
                     raise StoreError("legacy_profile_changed_after_adoption")
-            if origins["state"] == "publishing":
+            if origins["state"] == "publishing" or origins.get("source_stats") != current_stats:
                 origins["state"] = "ready"
+                origins["source_stats"] = current_stats
                 write_origins(marker, origins)
             return
         meaningful = [item for item in snapshots if item[2]]
@@ -383,6 +438,7 @@ def prepare_shared_profile(target: Path, selected_database: str | None = None) -
         record = {"schema": 1, "profile_id": uuid.uuid4().hex,
                   "state": "ready" if target.exists() else "publishing",
                   "sources": {profile_key(item[0]): item[3] for item in snapshots},
+                  "source_stats": current_stats,
                   "selected_source": str(selected[0]) if selected else None,
                   "database_identity": None}
         if target.exists():
@@ -448,6 +504,13 @@ def limit_field(req: dict, default: int = 20) -> int:
     return value
 
 
+def offset_field(req: dict) -> int:
+    offset = req.get("offset", 0)
+    if type(offset) is not int or not 0 <= offset < 2**63:
+        raise StoreError("invalid_offset")
+    return offset
+
+
 def now() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="microseconds")
 
@@ -491,7 +554,7 @@ def validate_snapshot(data: Any) -> dict:
             raise StoreError("invalid_import_reference")
 
     fields(data, "schema_version household preferences recipes meals plans")
-    if type(data["schema_version"]) is not int or data["schema_version"] not in (6, 7):
+    if type(data["schema_version"]) is not int or data["schema_version"] not in (6, 7, 8):
         raise StoreError("unsupported_import_schema")
     household = data["household"]
     fields(household, "onboarding members locale observances")
@@ -511,7 +574,12 @@ def validate_snapshot(data: Any) -> dict:
             raise StoreError("invalid_import_records")
         ids[domain] = set()
         for record in records:
-            fields(record, shapes[domain])
+            if domain == "meals" and data["schema_version"] >= 8 and isinstance(record, dict) and "deleted_recipe" in record:
+                expected_meal = set(shapes["meals"].split()) | {"deleted_recipe"}
+                if set(record) != expected_meal:
+                    raise StoreError("invalid_import_fields")
+            else:
+                fields(record, shapes[domain])
             string(record["id"], 200)
             if record["id"] != record["id"].strip():
                 raise StoreError("invalid_import_id")
@@ -585,6 +653,16 @@ def validate_snapshot(data: Any) -> dict:
             if not isinstance(member, str) or member not in ids["members"] or member in seen:
                 raise StoreError("invalid_import_members")
             seen.add(member)
+        if "deleted_recipe" in meal and meal["deleted_recipe"] is not None:
+            snap = meal["deleted_recipe"]
+            fields(snap, "id name source tags")
+            string(snap["id"], 200)
+            string(snap["name"])
+            string(snap["source"])
+            if not isinstance(snap["tags"], list) or len(snap["tags"]) > 50:
+                raise StoreError("invalid_import_tags")
+            for tag in snap["tags"]:
+                string(tag, 100)
     for plan in collections["plans"]:
         string(plan["title"])
         if type(plan["revision"]) is not int or not 1 <= plan["revision"] < 2**63:
@@ -643,13 +721,29 @@ class Store:
             if data:
                 result["profile_id"] = data["profile_id"]
             for path in discover_profiles(self.path):
-                snapshot, meaningful, fingerprint = profile_snapshot(path)
-                tables = {r[0] for r in snapshot.execute("SELECT name FROM sqlite_master WHERE type='table'")}
-                counts = {table: snapshot.execute(query).fetchone()[0]
-                          for table, query in PROFILE_COUNT_QUERIES.items() if table in tables}
-                snapshot.close()
+                cached_stat = (data or {}).get("source_stats", {}).get(profile_key(path))
+                if (data and data["state"] == "ready" and self.path.is_file()
+                        and cached_stat is not None and _source_stat(path) == cached_stat):
+                    with closing(sqlite3.connect(sqlite_uri(path), uri=True, timeout=10)) as ro:
+                        tables = {r[0] for r in ro.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+                        counts = {table: ro.execute(query).fetchone()[0]
+                                  for table, query in PROFILE_COUNT_QUERIES.items() if table in tables}
+                        meaningful = any(ro.execute(PROFILE_PRESENCE_QUERIES[table]).fetchone()
+                                         for table in tables - {"onboarding", "locale"} if table in PROFILE_PRESENCE_QUERIES)
+                        if "onboarding" in tables:
+                            row = ro.execute("SELECT status FROM onboarding WHERE singleton=1").fetchone()
+                            meaningful |= bool(row and row[0] in ("completed", "skipped"))
+                        if "locale" in tables:
+                            row = ro.execute("SELECT country,region,timezone,holiday_mode FROM locale WHERE singleton=1").fetchone()
+                            meaningful |= bool(row and tuple(row) != (None, None, None, "unknown"))
+                else:
+                    snapshot, meaningful, fingerprint = profile_snapshot(path)
+                    tables = {r[0] for r in snapshot.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+                    counts = {table: snapshot.execute(query).fetchone()[0]
+                              for table, query in PROFILE_COUNT_QUERIES.items() if table in tables}
+                    snapshot.close()
                 result["legacy_candidates"].append({"database": str(path),
-                                                     "has_saved_state": meaningful, "counts": counts})
+                                                     "has_saved_state": bool(meaningful), "counts": counts})
         return result
 
     def _connect(self) -> sqlite3.Connection:
@@ -716,10 +810,46 @@ class Store:
                 con.execute("CREATE TABLE import_requests (request_key TEXT PRIMARY KEY, "
                             "snapshot_hash TEXT NOT NULL, response TEXT NOT NULL)")
                 con.execute("PRAGMA user_version = 7")
-            elif version != 7:
+                version = 7
+            if version == 7:
+                recipe_cols = {r[1] for r in con.execute("PRAGMA table_info(recipes)")}
+                if "search_text" not in recipe_cols:
+                    con.execute("ALTER TABLE recipes ADD COLUMN search_text TEXT NOT NULL DEFAULT ''")
+                    for r in con.execute("SELECT id,name,content,tags FROM recipes").fetchall():
+                        con.execute("UPDATE recipes SET search_text=? WHERE id=?",
+                                    (self._recipe_search_text(r["name"], r["content"], json.loads(r["tags"])), r["id"]))
+                con.execute("CREATE TABLE IF NOT EXISTS recipe_requests (request_key TEXT PRIMARY KEY, "
+                            "request_payload TEXT NOT NULL, response TEXT NOT NULL)")
+                for r in con.execute("SELECT * FROM recipes ORDER BY id").fetchall():
+                    if not con.execute("SELECT 1 FROM recipe_requests WHERE request_key=?", (r["request_key"],)).fetchone():
+                        self._record_recipe_receipt(con, r["request_key"], json.loads(r["request_payload"]), self._recipe(r))
+                meal_cols = {r[1] for r in con.execute("PRAGMA table_info(meals)")}
+                if "recipe_snapshot" not in meal_cols:
+                    # Rebuild meals to add ON DELETE SET NULL on recipe_id and recipe_snapshot,
+                    # preserving all meals and meal_members without disabling foreign_keys.
+                    con.execute("CREATE TEMP TABLE _mig_meal_members AS SELECT meal_id,member_id FROM meal_members")
+                    con.execute("DROP TABLE meal_members")
+                    con.execute("CREATE TABLE meals_v8 (id TEXT PRIMARY KEY, kind TEXT NOT NULL CHECK(kind IN ('cooked','eaten')), "
+                                "name TEXT NOT NULL, occurred_on TEXT NOT NULL, recipe_id TEXT REFERENCES recipes(id) ON DELETE SET NULL, "
+                                "created_at TEXT NOT NULL, request_key TEXT NOT NULL UNIQUE, request_payload TEXT NOT NULL, "
+                                "recipe_snapshot TEXT)")
+                    con.execute("INSERT INTO meals_v8 (id,kind,name,occurred_on,recipe_id,created_at,request_key,request_payload,recipe_snapshot) "
+                                "SELECT id,kind,name,occurred_on,recipe_id,created_at,request_key,request_payload,NULL FROM meals")
+                    con.execute("DROP TABLE meals")
+                    con.execute("ALTER TABLE meals_v8 RENAME TO meals")
+                    con.execute("CREATE INDEX meals_date ON meals(occurred_on DESC)")
+                    con.execute("CREATE TABLE meal_members (meal_id TEXT NOT NULL REFERENCES meals(id) ON DELETE CASCADE, "
+                                "member_id TEXT NOT NULL REFERENCES members(id), PRIMARY KEY(meal_id,member_id))")
+                    con.execute("INSERT INTO meal_members (meal_id,member_id) SELECT meal_id,member_id FROM _mig_meal_members")
+                    con.execute("DROP TABLE _mig_meal_members")
+                    con.execute("CREATE INDEX meal_members_member ON meal_members(member_id,meal_id)")
+                con.execute("PRAGMA user_version = 8")
+            elif version != 8:
                 raise StoreError("unsupported_schema_version")
             # Also add this index to schema-4 previews created before pagination.
             con.execute("CREATE INDEX IF NOT EXISTS plans_listing ON plans(start_on DESC,updated_at DESC,id)")
+            con.execute("CREATE INDEX IF NOT EXISTS meals_kind_date ON meals(kind,occurred_on DESC,created_at DESC,id)")
+            con.execute("CREATE INDEX IF NOT EXISTS meals_occurred_created ON meals(occurred_on DESC,created_at DESC,id)")
             return con
         except Exception:
             con.close()
@@ -741,12 +871,16 @@ class Store:
             "preference-set": (self._preference_set, {"id", "kind", "target", "notes", "member_id"}),
             "preference-remove": (self._remove_preference, {"id"}),
             "recipe-save": (self._recipe_save, {"name", "content", "tags", "source", "request_key"}),
-            "recipe-search": (self._recipe_search, {"query", "favorites_only", "limit"}),
+            "recipe-update": (self._recipe_update, {"id", "name", "content", "tags", "source", "favorite", "request_key"}),
+            "recipe-remove": (self._recipe_remove, {"id", "request_key", "confirm"}),
+            "recipe-search": (self._recipe_search, {"query", "favorites_only", "limit", "offset"}),
             "recipe-get": (self._recipe_get, {"id"}),
             "recipe-favorite": (self._recipe_favorite, {"id", "favorite"}),
+            "recipe-import": (self._recipe_import, {"recipes", "request_key", "dry_run", "on_conflict", "confirm_overwrite"}),
             "meal-log": (self._meal_log, {"kind", "name", "occurred_on", "recipe_id", "request_key", "member_ids"}),
-            "meal-list": (self._meal_list, {"limit", "kind", "member_id"}),
-            "meal-remove": (self._remove_meal, {"id"}),
+            "meal-list": (self._meal_list, {"limit", "offset", "kind", "member_id", "on", "from_date", "to_date"}),
+            "meal-remove": (self._remove_meal, {"id", "request_key"}),
+            "meal-stats": (self._meal_stats, {"days", "from_date", "to_date", "on", "member_id", "top_limit"}),
             "plan-save": (self._plan_save, {"id", "expected_revision", "request_key", "title",
                                             "meals", "shopping_list", "notes"}),
             "plan-get": (self._plan_get, {"id"}),
@@ -792,12 +926,17 @@ class Store:
             con.close()
 
     @staticmethod
+    def _recipe_search_text(name: str, content: str, tags: list[str]) -> str:
+        return normalized(f"{name} {content} {' '.join(tags)}")
+
+    @staticmethod
     def _recipe(row: sqlite3.Row) -> dict:
         result = dict(row)
         result["tags"] = json.loads(result["tags"])
         result["favorite"] = bool(result["favorite"])
         result.pop("request_key", None)
         result.pop("request_payload", None)
+        result.pop("search_text", None)
         return result
 
     @staticmethod
@@ -805,6 +944,9 @@ class Store:
         result = dict(row)
         result.pop("request_key", None)
         result.pop("request_payload", None)
+        snapshot = result.pop("recipe_snapshot", None)
+        if snapshot:
+            result["deleted_recipe"] = json.loads(snapshot)
         result["member_ids"] = member_ids
         return result
 
@@ -1038,7 +1180,16 @@ class Store:
         return result
 
     def _remove_meal(self, con: sqlite3.Connection, req: dict) -> dict:
-        return self._remove(con, "meals", req)
+        if "request_key" not in req:
+            return self._remove(con, "meals", req)
+        key = text_field(req, "request_key", limit=200)
+        ident = text_field(req, "id", limit=200)
+        payload = {"action": "meal-remove", "id": ident}
+        previous = self._replayed(con, "meal_requests", key, payload)
+        if previous:
+            return json.loads(previous["response"])
+        result = self._remove(con, "meals", req)
+        return self._record_meal_receipt(con, key, payload, result)
 
     @staticmethod
     def _remove(con: sqlite3.Connection, table: str, req: dict) -> dict:
@@ -1056,27 +1207,102 @@ class Store:
             raise StoreError("request_key_conflict")
         return previous
 
-    def _recipe_save(self, con: sqlite3.Connection, req: dict) -> dict:
-        key = text_field(req, "request_key", limit=200)
-        text_field(req, "content", limit=100000)
-        payload = {"name": text_field(req, "name"), "content": req["content"]}
-        tags = req.get("tags", [])
+    @staticmethod
+    def _validate_tags(tags: Any) -> list[str]:
         if not isinstance(tags, list) or len(tags) > 50 or any(
             not isinstance(t, str) or not t.strip() or len(t) > 100 for t in tags
         ):
             raise StoreError("invalid_tags")
-        source = req.get("source", "generated")
+        return [t.strip() for t in tags]
+
+    @staticmethod
+    def _validate_source(source: Any) -> str:
         if not isinstance(source, str) or not source.strip() or len(source) > 2000:
             raise StoreError("invalid_source")
-        payload.update(tags=[t.strip() for t in tags], source=source.strip())
-        previous = self._replayed(con, "recipes", key, payload)
+        return source.strip()
+
+    @staticmethod
+    def _record_recipe_receipt(con: sqlite3.Connection, key: str, payload: dict, response: dict) -> dict:
+        con.execute("INSERT INTO recipe_requests VALUES (?,?,?)",
+                    (key, json.dumps(payload, ensure_ascii=False), json.dumps(response, ensure_ascii=False)))
+        return response
+
+    def _recipe_save(self, con: sqlite3.Connection, req: dict) -> dict:
+        key = text_field(req, "request_key", limit=200)
+        text_field(req, "content", limit=100000)
+        payload = {"name": text_field(req, "name"), "content": req["content"]}
+        tags = self._validate_tags(req.get("tags", []))
+        source = self._validate_source(req.get("source", "generated"))
+        payload.update(tags=tags, source=source)
+        previous = self._replayed(con, "recipe_requests", key, payload)
         if previous:
-            return self._recipe(previous)
+            return json.loads(previous["response"])
         ident = uuid.uuid4().hex
-        con.execute("INSERT INTO recipes VALUES (?,?,?,?,?,?,0,?,?)",
-                    (ident, payload["name"], payload["content"], json.dumps(payload["tags"], ensure_ascii=False),
-                     payload["source"], now(), key, json.dumps(payload, ensure_ascii=False)))
-        return self._recipe_get(con, {"id": ident})
+        search_text = self._recipe_search_text(payload["name"], payload["content"], tags)
+        con.execute("INSERT INTO recipes VALUES (?,?,?,?,?,?,0,?,?,?)",
+                    (ident, payload["name"], payload["content"], json.dumps(tags, ensure_ascii=False),
+                     source, now(), key, json.dumps(payload, ensure_ascii=False), search_text))
+        saved = self._recipe_get(con, {"id": ident})
+        return self._record_recipe_receipt(con, key, payload, saved)
+
+    def _recipe_update(self, con: sqlite3.Connection, req: dict) -> dict:
+        key = text_field(req, "request_key", limit=200)
+        ident = text_field(req, "id", limit=200)
+        updates: dict[str, Any] = {}
+        if "name" in req:
+            updates["name"] = text_field(req, "name")
+        if "content" in req:
+            text_field(req, "content", limit=100000)
+            updates["content"] = req["content"]
+        if "tags" in req:
+            updates["tags"] = self._validate_tags(req["tags"])
+        if "source" in req:
+            updates["source"] = self._validate_source(req["source"])
+        if "favorite" in req:
+            updates["favorite"] = boolean(req, "favorite")
+        if not updates:
+            raise StoreError("recipe_update_requires_fields")
+        payload = {"action": "recipe-update", "id": ident, **updates}
+        previous = self._replayed(con, "recipe_requests", key, payload)
+        if previous:
+            return json.loads(previous["response"])
+        current = self._recipe_get(con, {"id": ident})
+        name = updates.get("name", current["name"])
+        content = updates.get("content", current["content"])
+        tags = updates.get("tags", current["tags"])
+        source = updates.get("source", current["source"])
+        favorite = int(updates.get("favorite", current["favorite"]))
+        search_text = self._recipe_search_text(name, content, tags)
+        con.execute(
+            "UPDATE recipes SET name=?,content=?,tags=?,source=?,favorite=?,search_text=? WHERE id=?",
+            (name, content, json.dumps(tags, ensure_ascii=False), source, favorite, search_text, ident),
+        )
+        updated = self._recipe_get(con, {"id": ident})
+        return self._record_recipe_receipt(con, key, payload, updated)
+
+    def _recipe_remove(self, con: sqlite3.Connection, req: dict) -> dict:
+        key = text_field(req, "request_key", limit=200)
+        ident = text_field(req, "id", limit=200)
+        if not boolean(req, "confirm", False):
+            raise StoreError("recipe_remove_requires_confirmation")
+        payload = {"action": "recipe-remove", "id": ident, "confirm": True}
+        previous = self._replayed(con, "recipe_requests", key, payload)
+        if previous:
+            return json.loads(previous["response"])
+        recipe = self._recipe_get(con, {"id": ident})
+        snapshot = json.dumps({
+            "id": recipe["id"],
+            "name": recipe["name"],
+            "source": recipe["source"],
+            "tags": recipe["tags"],
+        }, ensure_ascii=False)
+        unlinked = con.execute(
+            "UPDATE meals SET recipe_id=NULL, recipe_snapshot=? WHERE recipe_id=?",
+            (snapshot, ident),
+        ).rowcount
+        con.execute("DELETE FROM recipes WHERE id=?", (ident,))
+        result = {"id": ident, "removed": True, "unlinked_meals": unlinked}
+        return self._record_recipe_receipt(con, key, payload, result)
 
     def _recipe_search(self, con: sqlite3.Connection, req: dict) -> list[dict]:
         query = req.get("query", "")
@@ -1084,19 +1310,166 @@ class Store:
             raise StoreError("invalid_query")
         favorites = boolean(req, "favorites_only")
         limit = limit_field(req)
+        offset = offset_field(req)
         terms = normalized(query).split()
+        clauses = []
+        params: list[Any] = []
+        if favorites:
+            clauses.append("favorite = 1")
+        for term in terms:
+            clauses.append("INSTR(search_text, ?) > 0")
+            params.append(term)
+        where = f"WHERE {' AND '.join(clauses)} " if clauses else ""
+        sql = (
+            "SELECT id,name,tags,source,created_at,favorite "
+            f"FROM recipes {where}ORDER BY created_at DESC, id LIMIT ? OFFSET ?"
+        )
+        params.extend([limit, offset])
         results = []
-        for row in con.execute("SELECT * FROM recipes ORDER BY created_at DESC, id"):
-            if favorites and not row["favorite"]:
-                continue
-            haystack = normalized(row["name"] + " " + row["content"] + " " + row["tags"])
-            if all(term in haystack for term in terms):
-                item = self._recipe(row)
-                item.pop("content")
-                results.append(item)
-            if len(results) >= limit:
-                break
+        for row in con.execute(sql, params):
+            item = dict(row)
+            item["tags"] = json.loads(item["tags"])
+            item["favorite"] = bool(item["favorite"])
+            results.append(item)
         return results
+
+    def _recipe_import(self, con: sqlite3.Connection, req: dict) -> dict:
+        key = text_field(req, "request_key", limit=200)
+        dry_run = boolean(req, "dry_run", False)
+        on_conflict = req.get("on_conflict", "fail")
+        if on_conflict not in ("fail", "skip", "overwrite", "new_id"):
+            raise StoreError("invalid_on_conflict")
+        confirm_overwrite = boolean(req, "confirm_overwrite", False)
+        if on_conflict == "overwrite" and not confirm_overwrite:
+            raise StoreError("recipe_import_requires_confirmation")
+        recipes = req.get("recipes")
+        if not isinstance(recipes, list) or len(recipes) > 10000:
+            raise StoreError("invalid_import_records")
+        try:
+            encoded = json.dumps(
+                {"recipes": recipes, "on_conflict": on_conflict, "confirm_overwrite": confirm_overwrite},
+                sort_keys=True, ensure_ascii=False, allow_nan=False,
+            ).encode("utf-8")
+        except (TypeError, ValueError, UnicodeError, RecursionError):
+            raise StoreError("invalid_import_json") from None
+        if len(encoded) > 20 * 1024 * 1024:
+            raise StoreError("invalid_import_size")
+        digest = hashlib.sha256(encoded).hexdigest()
+        if not dry_run:
+            previous = con.execute("SELECT * FROM import_requests WHERE request_key=?", (key,)).fetchone()
+            if previous:
+                if previous["snapshot_hash"] != digest:
+                    raise StoreError("request_key_conflict")
+                return json.loads(previous["response"])
+
+        # Validate every incoming recipe strictly before mutating anything.
+        normalized_items = []
+        seen_ids = set()
+        allowed_fields = {"id", "name", "content", "tags", "source", "created_at", "favorite"}
+        for item in recipes:
+            if not isinstance(item, dict) or set(item) - allowed_fields:
+                raise StoreError("invalid_import_fields")
+            name = text_field(item, "name")
+            text_field(item, "content", limit=100000)
+            content = item["content"]
+            tags = self._validate_tags(item.get("tags", []))
+            source = self._validate_source(item.get("source", "imported"))
+            favorite = boolean(item, "favorite", False)
+            ident = item.get("id")
+            if ident is not None:
+                if not isinstance(ident, str) or not ident.strip() or ident != ident.strip() or len(ident) > 200:
+                    raise StoreError("invalid_import_id")
+                if ident in seen_ids:
+                    raise StoreError("invalid_import_duplicate_id")
+                seen_ids.add(ident)
+            created_at = item.get("created_at")
+            if created_at is not None:
+                if not isinstance(created_at, str) or len(created_at) > 100 or not created_at.strip():
+                    raise StoreError("invalid_import_timestamp")
+                try:
+                    parsed = datetime.fromisoformat(created_at)
+                    if parsed.tzinfo is None:
+                        raise ValueError()
+                except ValueError:
+                    raise StoreError("invalid_import_timestamp") from None
+            else:
+                created_at = now()
+            normalized_items.append({
+                "id": ident, "name": name, "content": content, "tags": tags,
+                "source": source, "created_at": created_at, "favorite": favorite,
+            })
+
+        existing_by_id = {
+            r["id"]: r for r in con.execute("SELECT id,name,content FROM recipes").fetchall()
+        }
+        existing_content_sigs = {
+            (normalized(r["name"]), normalized(r["content"])): r["id"]
+            for r in existing_by_id.values()
+        }
+        imported_count = 0
+        skipped_count = 0
+        overwritten_count = 0
+        renamed_ids: list[dict[str, str]] = []
+        conflicts: list[dict[str, str]] = []
+        duplicate_matches: list[dict[str, str]] = []
+
+        for item in normalized_items:
+            sig = (normalized(item["name"]), normalized(item["content"]))
+            dup_id = existing_content_sigs.get(sig)
+            if dup_id is not None:
+                duplicate_matches.append({"incoming_name": item["name"], "existing_id": dup_id})
+
+            target_id = item["id"] or uuid.uuid4().hex
+            if target_id in existing_by_id:
+                conflicts.append({"id": target_id, "name": item["name"]})
+                if on_conflict == "fail":
+                    if not dry_run:
+                        raise StoreError("recipe_import_id_conflict")
+                    continue
+                if on_conflict == "skip":
+                    skipped_count += 1
+                    continue
+                if on_conflict == "overwrite":
+                    overwritten_count += 1
+                    if not dry_run:
+                        search_text = self._recipe_search_text(item["name"], item["content"], item["tags"])
+                        con.execute(
+                            "UPDATE recipes SET name=?,content=?,tags=?,source=?,favorite=?,search_text=? WHERE id=?",
+                            (item["name"], item["content"], json.dumps(item["tags"], ensure_ascii=False),
+                             item["source"], int(item["favorite"]), search_text, target_id),
+                        )
+                    continue
+                if on_conflict == "new_id":
+                    new_id = uuid.uuid4().hex
+                    renamed_ids.append({"original_id": target_id, "new_id": new_id})
+                    target_id = new_id
+
+            imported_count += 1
+            if not dry_run:
+                search_text = self._recipe_search_text(item["name"], item["content"], item["tags"])
+                payload = {k: item[k] for k in ("name", "content", "tags", "source")}
+                con.execute(
+                    "INSERT INTO recipes VALUES (?,?,?,?,?,?,?,?,?,?)",
+                    (target_id, item["name"], item["content"], json.dumps(item["tags"], ensure_ascii=False),
+                     item["source"], item["created_at"], int(item["favorite"]), uuid.uuid4().hex,
+                     json.dumps(payload, ensure_ascii=False), search_text),
+                )
+            existing_by_id[target_id] = {"id": target_id, "name": item["name"], "content": item["content"]}
+            existing_content_sigs[sig] = target_id
+
+        result = {
+            "dry_run": dry_run,
+            "on_conflict": on_conflict,
+            "imported": imported_count,
+            "skipped": skipped_count,
+            "overwritten": overwritten_count,
+            "renamed_ids": renamed_ids,
+            "conflicts": conflicts,
+            "duplicate_matches": duplicate_matches,
+        }
+        if not dry_run:
+            con.execute("INSERT INTO import_requests VALUES (?,?,?)", (key, digest, json.dumps(result)))
+        return result
 
     def _recipe_get(self, con: sqlite3.Connection, req: dict) -> dict:
         row = con.execute("SELECT * FROM recipes WHERE id=?", (text_field(req, "id", limit=200),)).fetchone()
@@ -1139,19 +1512,34 @@ class Store:
             if not con.execute("SELECT id FROM members WHERE id=?", (member,)).fetchone():
                 raise StoreError("member_not_found")
         ident = uuid.uuid4().hex
-        con.execute("INSERT INTO meals VALUES (?,?,?,?,?,?,?,?)",
+        con.execute("INSERT INTO meals VALUES (?,?,?,?,?,?,?,?,?)",
                     (ident, kind, payload["name"], occurred_on, recipe_id, now(), key,
-                     json.dumps(payload, ensure_ascii=False)))
+                     json.dumps(payload, ensure_ascii=False), None))
         con.executemany("INSERT INTO meal_members(meal_id,member_id) VALUES (?,?)",
                         [(ident, member) for member in member_ids])
         meal = self._meals(con, [con.execute("SELECT * FROM meals WHERE id=?", (ident,)).fetchone()])[0]
         return self._record_meal_receipt(con, key, payload, meal)
 
+    @staticmethod
+    def _meal_date_filters(req: dict) -> tuple[str | None, str | None]:
+        if "on" in req:
+            if "from_date" in req or "to_date" in req:
+                raise StoreError("invalid_date_filter")
+            day = date_field(req, "on").isoformat()
+            return day, day
+        from_date = date_field(req, "from_date").isoformat() if "from_date" in req else None
+        to_date = date_field(req, "to_date").isoformat() if "to_date" in req else None
+        if from_date and to_date and from_date > to_date:
+            raise StoreError("invalid_date_range")
+        return from_date, to_date
+
     def _meal_list(self, con: sqlite3.Connection, req: dict) -> list[dict]:
         limit = limit_field(req)
+        offset = offset_field(req)
         kind = req.get("kind")
         if kind is not None and kind not in ("cooked", "eaten"):
             raise StoreError("invalid_meal_kind")
+        from_date, to_date = self._meal_date_filters(req)
         if "member_id" in req:
             member = text_field(req, "member_id", limit=200)
             if not con.execute("SELECT id FROM members WHERE id=?", (member,)).fetchone():
@@ -1159,12 +1547,139 @@ class Store:
             rows = con.execute(
                 "SELECT m.* FROM meal_members mm JOIN meals m ON m.id=mm.meal_id "
                 "WHERE mm.member_id=? AND (? IS NULL OR m.kind=?) "
-                "ORDER BY m.occurred_on DESC,m.created_at DESC,m.id LIMIT ?", (member, kind, kind, limit))
+                "AND (? IS NULL OR m.occurred_on>=?) AND (? IS NULL OR m.occurred_on<=?) "
+                "ORDER BY m.occurred_on DESC,m.created_at DESC,m.id LIMIT ? OFFSET ?",
+                (member, kind, kind, from_date, from_date, to_date, to_date, limit, offset))
         else:
             rows = con.execute(
-                "SELECT * FROM meals WHERE (? IS NULL OR kind=?) ORDER BY occurred_on DESC,created_at DESC,id LIMIT ?",
-                (kind, kind, limit))
+                "SELECT * FROM meals WHERE (? IS NULL OR kind=?) "
+                "AND (? IS NULL OR occurred_on>=?) AND (? IS NULL OR occurred_on<=?) "
+                "ORDER BY occurred_on DESC,created_at DESC,id LIMIT ? OFFSET ?",
+                (kind, kind, from_date, from_date, to_date, to_date, limit, offset))
         return self._meals(con, list(rows))
+
+    def _meal_stats(self, con: sqlite3.Connection, req: dict) -> dict:
+        if "days" in req and ("from_date" in req or "to_date" in req):
+            raise StoreError("invalid_date_filter")
+        if "from_date" in req or "to_date" in req:
+            if "on" in req:
+                raise StoreError("invalid_date_filter")
+            from_d = date_field(req, "from_date").isoformat() if "from_date" in req else None
+            to_d = date_field(req, "to_date").isoformat() if "to_date" in req else None
+            if from_d and to_d and from_d > to_d:
+                raise StoreError("invalid_date_range")
+        else:
+            days = req.get("days", 30)
+            if type(days) is not int or not 1 <= days <= 3650:
+                raise StoreError("invalid_days")
+            anchor = date_field(req, "on") if "on" in req else datetime.now(timezone.utc).date()
+            to_d = anchor.isoformat()
+            from_d = (anchor - timedelta(days=days - 1)).isoformat()
+
+        top_limit = req.get("top_limit", 10)
+        if type(top_limit) is not int or not 1 <= top_limit <= 50:
+            raise StoreError("invalid_top_limit")
+
+        member_id = None
+        if "member_id" in req and req["member_id"] is not None:
+            member_id = text_field(req, "member_id", limit=200)
+            if not con.execute("SELECT id FROM members WHERE id=?", (member_id,)).fetchone():
+                raise StoreError("member_not_found")
+
+        if member_id is not None:
+            rows = con.execute(
+                "SELECT m.kind, m.name, m.occurred_on, m.recipe_id, m.recipe_snapshot "
+                "FROM meal_members mm JOIN meals m ON m.id=mm.meal_id "
+                "WHERE mm.member_id=? AND (? IS NULL OR m.occurred_on>=?) AND (? IS NULL OR m.occurred_on<=?) "
+                "ORDER BY m.occurred_on DESC, m.id",
+                (member_id, from_d, from_d, to_d, to_d),
+            ).fetchall()
+        else:
+            rows = con.execute(
+                "SELECT kind, name, occurred_on, recipe_id, recipe_snapshot FROM meals "
+                "WHERE (? IS NULL OR occurred_on>=?) AND (? IS NULL OR occurred_on<=?) "
+                "ORDER BY occurred_on DESC, id",
+                (from_d, from_d, to_d, to_d),
+            ).fetchall()
+
+        total_cooked = 0
+        total_eaten = 0
+        dishes: dict[str, dict[str, Any]] = {}
+        for row in rows:
+            kind = row["kind"]
+            if kind == "cooked":
+                total_cooked += 1
+            else:
+                total_eaten += 1
+            key_name = normalized(row["name"])
+            entry = dishes.get(key_name)
+            if entry is None:
+                entry = {
+                    "name": row["name"],
+                    "total_count": 0,
+                    "cooked_count": 0,
+                    "eaten_count": 0,
+                    "last_cooked_on": None,
+                    "last_eaten_on": None,
+                    "recipe_ids": [],
+                    "deleted_recipe_names": [],
+                }
+                dishes[key_name] = entry
+            entry["total_count"] += 1
+            occ = row["occurred_on"]
+            if kind == "cooked":
+                entry["cooked_count"] += 1
+                if entry["last_cooked_on"] is None or occ > entry["last_cooked_on"]:
+                    entry["last_cooked_on"] = occ
+            else:
+                entry["eaten_count"] += 1
+                if entry["last_eaten_on"] is None or occ > entry["last_eaten_on"]:
+                    entry["last_eaten_on"] = occ
+            if row["recipe_id"] and row["recipe_id"] not in entry["recipe_ids"]:
+                entry["recipe_ids"].append(row["recipe_id"])
+            if row["recipe_snapshot"]:
+                snap = json.loads(row["recipe_snapshot"])
+                if snap["name"] not in entry["deleted_recipe_names"]:
+                    entry["deleted_recipe_names"].append(snap["name"])
+
+        dish_list = sorted(
+            dishes.values(),
+            key=lambda d: (-d["total_count"], -(1 if d["last_eaten_on"] else 0), d["name"].casefold()),
+        )
+        for d in dish_list:
+            d["recipe_ids"].sort()
+            if not d["deleted_recipe_names"]:
+                d.pop("deleted_recipe_names")
+            else:
+                d["deleted_recipe_names"].sort()
+
+        eaten_dishes = [d for d in dish_list if d["eaten_count"] > 0]
+        cooked_dishes = [d for d in dish_list if d["cooked_count"] > 0]
+        most_repeated_eaten = sorted(
+            [
+                {"name": d["name"], "eaten_count": d["eaten_count"], "last_eaten_on": d["last_eaten_on"]}
+                for d in eaten_dishes
+            ],
+            key=lambda d: (-d["eaten_count"], d["name"].casefold()),
+        )[:top_limit]
+
+        return {
+            "period": {"from_date": from_d, "to_date": to_d},
+            "member_id": member_id,
+            "totals": {
+                "logged_events": len(rows),
+                "cooked": total_cooked,
+                "eaten": total_eaten,
+                "distinct_dishes": len(dish_list),
+                "distinct_cooked_dishes": len(cooked_dishes),
+                "distinct_eaten_dishes": len(eaten_dishes),
+            },
+            "variety": {
+                "eaten_uniqueness_ratio": round(len(eaten_dishes) / total_eaten, 3) if total_eaten else 0.0,
+            },
+            "dishes": dish_list[:top_limit],
+            "most_repeated_eaten": most_repeated_eaten,
+        }
 
     @staticmethod
     def _plan(row: sqlite3.Row) -> dict:
@@ -1299,7 +1814,7 @@ class Store:
         return self._record_plan_receipt(con, key, req, result)
 
     def _export(self, con: sqlite3.Connection, req: dict) -> dict:
-        return {"schema_version": 7, "household": self._household(con),
+        return {"schema_version": 8, "household": self._household(con),
                 "plans": [self._plan(row) for row in con.execute("SELECT * FROM plans ORDER BY id")],
                 "preferences": [dict(r) for r in con.execute("SELECT * FROM preferences ORDER BY id")],
                 "recipes": [self._recipe(r) for r in con.execute("SELECT * FROM recipes ORDER BY id")],
@@ -1326,7 +1841,7 @@ class Store:
             "SELECT 1 FROM members UNION ALL SELECT 1 FROM preferences UNION ALL SELECT 1 FROM observances "
             "UNION ALL SELECT 1 FROM recipes UNION ALL SELECT 1 FROM meals UNION ALL SELECT 1 FROM plans "
             "UNION ALL SELECT 1 FROM plan_requests UNION ALL SELECT 1 FROM meal_requests "
-            "UNION ALL SELECT 1 FROM import_requests LIMIT 1").fetchone()
+            "UNION ALL SELECT 1 FROM recipe_requests UNION ALL SELECT 1 FROM import_requests LIMIT 1").fetchone()
         if (occupied or household["onboarding"]["status"] != "pending" or
                 any(household["locale"][field] is not None for field in ("country", "region", "timezone")) or
                 household["locale"]["holiday_mode"] != "unknown"):
@@ -1344,17 +1859,19 @@ class Store:
                                                    "strictness", "active", "member_id", "notes", "updated_at")))
         for recipe in data["recipes"]:
             payload = {k: recipe[k] for k in ("name", "content", "tags", "source")}
-            con.execute("INSERT INTO recipes VALUES (?,?,?,?,?,?,?,?,?)",
+            search_text = self._recipe_search_text(recipe["name"], recipe["content"], recipe["tags"])
+            con.execute("INSERT INTO recipes VALUES (?,?,?,?,?,?,?,?,?,?)",
                         (recipe["id"], recipe["name"], recipe["content"], json.dumps(recipe["tags"], ensure_ascii=False),
                          recipe["source"], recipe["created_at"], recipe["favorite"], uuid.uuid4().hex,
-                         json.dumps(payload, ensure_ascii=False)))
+                         json.dumps(payload, ensure_ascii=False), search_text))
         for meal in data["meals"]:
             payload = {k: meal[k] for k in ("kind", "name", "occurred_on", "recipe_id", "member_ids")}
             payload["member_ids"] = sorted(payload["member_ids"])
             internal_key = uuid.uuid4().hex
-            con.execute("INSERT INTO meals VALUES (?,?,?,?,?,?,?,?)",
+            snap = json.dumps(meal["deleted_recipe"], ensure_ascii=False) if meal.get("deleted_recipe") else None
+            con.execute("INSERT INTO meals VALUES (?,?,?,?,?,?,?,?,?)",
                         (meal["id"], meal["kind"], meal["name"], meal["occurred_on"], meal["recipe_id"],
-                         meal["created_at"], internal_key, json.dumps(payload, ensure_ascii=False)))
+                         meal["created_at"], internal_key, json.dumps(payload, ensure_ascii=False), snap))
             con.executemany("INSERT INTO meal_members VALUES (?,?)", [(meal["id"], m) for m in meal["member_ids"]])
             self._record_meal_receipt(con, internal_key, payload, {**meal, "member_ids": payload["member_ids"]})
         for plan in data["plans"]:

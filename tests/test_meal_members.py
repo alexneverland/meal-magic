@@ -111,7 +111,7 @@ class MealMemberTests(unittest.TestCase):
         self.call("meal-remove", id=saved["id"])
         self.assertEqual(self.log(member_ids=[self.one["id"]]), saved)
         self.assertEqual(self.call("meal-list", member_id=self.one["id"]), [])
-        self.assertEqual(self.call("export")["schema_version"], 7)
+        self.assertEqual(self.call("export")["schema_version"], 8)
 
     def test_receipt_failure_rolls_back_meal_and_member_links(self):
         with closing(sqlite3.connect(self.store.path)) as con:
@@ -261,7 +261,7 @@ class MealMemberTests(unittest.TestCase):
         before = self.call("export")
         legacy = self.legacy_profile()
         result = self.call("export")
-        self.assertEqual(result["schema_version"], 7)
+        self.assertEqual(result["schema_version"], 8)
         self.assertEqual(result["recipes"], [recipe])
         self.assertEqual(result["preferences"], [pref])
         self.assertEqual(result["plans"], [plan])
@@ -276,7 +276,7 @@ class MealMemberTests(unittest.TestCase):
         self.assertEqual(self.call("meal-list", member_id=self.one["id"]), [])
         with closing(sqlite3.connect(self.store.path)) as con:
             self.assertNotIn("member_ids", json.loads(con.execute("SELECT request_payload FROM meals").fetchone()[0]))
-            self.assertEqual(con.execute("PRAGMA user_version").fetchone()[0], 7)
+            self.assertEqual(con.execute("PRAGMA user_version").fetchone()[0], 8)
 
     def test_failed_write_rolls_back_schema_four_migration(self):
         legacy = self.legacy_profile()

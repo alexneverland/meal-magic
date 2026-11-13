@@ -4,7 +4,7 @@ A local-first cooking skill for AI agents. Get step-by-step recipes, plan meals,
 and remember what you cooked and ate. Your agent writes the recipes, while a shared
 Python helper stores preferences, favorites and meal history on your computer.
 
-**Version 0.6.3 — Recipe presentation and meal variety.**
+**Version 0.7.0 — Recipe CRUD, meal history filtering, variety stats, selective recipe import, and performance upgrades.**
 Basic live use of v0.6.1 in Codex was observed on
 2026-11-05 and confirmed working by the project owner. The new discovery behavior
 has synthetic automated coverage, an owner-authorized Codex storage upgrade with

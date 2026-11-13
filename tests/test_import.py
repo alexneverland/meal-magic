@@ -65,9 +65,9 @@ class ImportTests(unittest.TestCase):
         data["schema_version"] = 6
         self.restore(data)
         exported = self.call(self.target, "export")
-        data["schema_version"] = 7
+        data["schema_version"] = 8
         self.assertEqual(exported, data)
-        for version in (True, "7", 0, 4, 5, 8, 99):
+        for version in (True, "7", 0, 4, 5, 9, 99):
             bad = copy.deepcopy(data)
             bad["schema_version"] = version
             with self.subTest(version=version), self.assertRaisesRegex(StoreError, "unsupported_import_schema"):
