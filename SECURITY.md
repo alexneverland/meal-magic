@@ -13,8 +13,11 @@ history. Removing a meal removes that event's links, not household member record
 Durable meal-log receipts also retain original request/response text and member
 IDs after event or member removal, preventing redelivery from recreating events.
 Meal removal is not complete erasure; JSON export omits these internal receipts.
-Deleting a recipe (`recipe-remove`) retains a metadata snapshot (`id`, `name`,
-`source`, `tags`) on linked meals while removing the recipe record and its content.
+Deleting a recipe (`recipe-remove`) removes the active recipe record while
+retaining a metadata snapshot (`id`, `name`, `source`, `tags`) on linked meals
+and keeping durable recipe mutation receipts (`recipe_requests`, including
+earlier request/response recipe text) for retry safety; recipe removal is not
+complete erasure, and JSON export omits those internal receipts.
 JSON import accepts schema-6, 7, or 8 exports only into an empty profile, with bounded
 structural validation and atomic writes. It never executes imported recipe text,
 merges into another household, clears existing data or restores hidden source
