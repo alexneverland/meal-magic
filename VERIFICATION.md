@@ -1,4 +1,23 @@
-# Verification — updated 2026-11-06
+# Verification — updated 2026-11-13
+
+Version: **0.7.0**.
+Work was performed without subagents.
+
+## v0.7.0 implementation and verification
+
+- **Schema v8 & Migrations:** Additive, transactional v7→v8 upgrade adds `recipes.search_text`, `recipe_requests`, `meals.recipe_snapshot`, `ON DELETE SET NULL` on `meals.recipe_id` (preserving `meal_members` and meal history), and `meals` date/kind indexes.
+- **Complete Recipe CRUD & Safe Deletion:** Added `recipe-update` (partial updates with `request_key` idempotency) and `recipe-remove` (requires `confirm: true` and `request_key`; snapshots deleted recipe metadata onto linked `meals` and sets `recipe_id = NULL` without cascading meal deletion).
+- **Search & Meal History Filtering:** `recipe-search` now uses SQL `INSTR` over pre-normalized `search_text` with `limit` and `offset` pagination (preserving Greek accent/case-insensitive substring matching). `meal-list` adds SQL `from_date`, `to_date`, `on`, and `offset` pagination. `meal-remove` adds optional `request_key` idempotency.
+- **Meal Statistics (`meal-stats`):** Added read-only summary action returning `cooked` vs `eaten` totals, distinct dish counts, `eaten_uniqueness_ratio`, and most-repeated eaten dishes for configurable date windows.
+- **Selective Recipe Import (`recipe-import`):** Added transactional selective recipe import with `dry_run` preview, duplicate detection, and `on_conflict` (`fail`, `skip`, `overwrite` requiring `confirm_overwrite: true`, `new_id`) while preserving existing full-profile `import` empty-destination rules.
+- **Windows Shared-Profile Fast Path:** `prepare_shared_profile` records `source_stats` (device, inode, size, mtime, and `-wal` sidecar state) in `.origins.json` and skips full `profile_snapshot` (`backup`, `quick_check`, `foreign_key_check`, `iterdump`, SHA-256) when target identity, SQLite header, discovered legacy set, and `source_stats` match; any mismatch falls back to full conservative validation.
+- **Automated Scenario Harness (`tools/verify_scenarios.py`):**
+  - **Level 1 (Deterministic CLI/state tests):** 7/7 synthetic scenarios passed in isolated temporary directories.
+  - **Level 2 (Live agent-integration tests):** Not executed (`no_live_adapter_configured`); deterministic CLI tests do not prove live model behavior in Codex, Antigravity, or Claude Code.
+
+---
+
+# Earlier Verification — updated 2026-11-06
 
 Version: **0.6.3**. Release preparation was authorized by the project owner.
 Work was performed without subagents.

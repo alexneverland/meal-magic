@@ -17,10 +17,10 @@ PUBLIC_FILES = (
     "skills/meal-magic/scripts/meal_store.py", "skills/meal-magic/references/storage-cli.md",
     "skills/meal-magic/references/household.md", "skills/meal-magic/references/occasions.md",
     "skills/meal-magic/references/recipes-plans.md", "skills/meal-magic/references/meal-history.md",
-    "tools/manage_skill.py", "tools/build_package.py", "tools/check_repository.py",
+    "tools/manage_skill.py", "tools/build_package.py", "tools/check_repository.py", "tools/verify_scenarios.py",
     "tests/test_store.py", "tests/test_household.py", "tests/test_observances.py",
     "tests/test_install.py", "tests/test_package.py", "tests/test_plans.py", "tests/test_meal_members.py",
-    "tests/test_import.py", "tests/test_profile_discovery.py", "tests/agent-scenarios.md",
+    "tests/test_import.py", "tests/test_profile_discovery.py", "tests/test_v070.py", "tests/agent-scenarios.md",
 )
 
 

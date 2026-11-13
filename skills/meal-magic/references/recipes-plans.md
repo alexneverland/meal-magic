@@ -9,9 +9,9 @@ Use available ingredients, current preferences, practical time/serving constrain
 and actual recent meals to offer a few useful options. Distinguish ingredients
 already available from any extras needed.
 
-For variety, consider the relevant diners' recently eaten dishes. Use the
-[meal history workflow](meal-history.md) when checking a specific diner's
-consumption. A cooked-only event does not establish that someone ate the dish.
+For variety, consider the relevant diners' recently eaten dishes. Use `meal-stats`
+or the [meal history workflow](meal-history.md) when checking a specific diner's
+consumption or dish frequency. A cooked-only event does not establish that someone ate the dish.
 Favor meaningful differences when reasonable alternatives fit.
 Weigh the overall dish, main ingredients and cooking method together. Changing
 roast chicken's side from potatoes to rice can still feel repetitive. Chicken
@@ -41,7 +41,10 @@ they are absent. The tool's search is literal, accent-insensitive matching in
 name/content/tags; choose useful search terms yourself. Retry with simpler terms
 or list recipes with an empty query. Pick by ID; ask when multiple versions make
 the user's intended choice unclear. Fetch the exact saved content rather than
-regenerating it and calling it the original. New adaptations get new recipe IDs.
+regenerating it and calling it the original. Use `recipe-update` only when the user
+explicitly asks to edit a saved recipe; new adaptations otherwise get new recipe IDs.
+Delete a saved recipe only when explicitly requested, using `recipe-remove` with
+`confirm: true` and a `request_key` (historical meals remain intact).
 
 ## Presenting a complete recipe
 

@@ -23,7 +23,8 @@ to log an otherwise clear actual event, and never backfill old unknown attendanc
 
 For separate dishes actually eaten by different people, record a separate event
 for each dish with its reported diners and its own request key. Use `meal-list`
-with `member_id` and `kind=eaten` for that person's recent consumption and variety.
+(with `member_id`, `kind=eaten`, and optional `on` / `from_date` / `to_date` and
+`offset`) or `meal-stats` for that person's recent consumption and variety.
 Unspecified events are excluded from personal history; they cannot establish
 what that person ate. Cooked events describe preparation, not consumption.
 
@@ -34,7 +35,8 @@ is unclear whether it describes the already logged event, inspect history and
 clarify before writing. A genuine repeat meal or eating leftovers is a separate
 event, even on the same day. Never deduplicate by meal-name similarity. A favorite,
 recipe save, recipe retrieval, or suggestion never implies cooking or eating.
-Remove an incorrect event by ID only when the user requests a correction/removal.
+Remove an incorrect event by ID only when the user requests a correction/removal,
+passing a `request_key` on `meal-remove` so uncertain retries are idempotent.
 To correct membership, explicitly remove that incorrect event and log its corrected
 replacement with a new request key; reuse the key of the replacement on retries.
 These are two separate transactions: if interrupted after removal, report that

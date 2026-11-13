@@ -153,7 +153,7 @@ class SharedProfileTests(unittest.TestCase):
         self.assertEqual(self.call()["result"]["preferences"][0]["id"], "synthetic-old")
         self.assertEqual(self.digest(self.native), before)
         with closing(sqlite3.connect(self.target / "meal-magic.sqlite3")) as con:
-            self.assertEqual(con.execute("PRAGMA user_version").fetchone()[0], 7)
+            self.assertEqual(con.execute("PRAGMA user_version").fetchone()[0], 8)
 
     def test_scan_failure_does_not_initialize_a_new_database(self):
         with patch.object(module, "windows_legacy_paths", side_effect=PermissionError("synthetic denied directory")):
