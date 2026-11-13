@@ -5,15 +5,18 @@ and remember what you cooked and ate. Your agent writes the recipes, while a sha
 Python helper stores preferences, favorites and meal history on your computer.
 
 **Version 0.7.0 — Recipe CRUD, meal history filtering, variety stats, selective recipe import, and performance upgrades.**
-Basic live use of v0.6.1 in Codex was observed on
-2026-11-05 and confirmed working by the project owner. The new discovery behavior
-has synthetic automated coverage, an owner-authorized Codex storage upgrade with
-export/backup comparison, and an owner-reported successful clean Antigravity
-v0.6.2 reinstall that retrieved the same shared profile. Subsequent owner-authorized
-use covered breakfast suggestions and actual-meal records read back through Codex. See
-[VERIFICATION.md](VERIFICATION.md) for exactly what was tested.
+See [VERIFICATION.md](VERIFICATION.md) for what was verified automatically and in owner-authorized live sessions.
 
 **[Download the latest published release (ZIP and SHA-256 checksum)](https://github.com/alexneverland/meal-magic/releases/latest)** · [All releases](https://github.com/alexneverland/meal-magic/releases)
+
+### What's new in v0.7.0
+
+- **Complete recipe management:** Edit saved recipes with `recipe-update` and permanently delete recipes with `recipe-remove` (`confirm: true`) while preserving linked meal history via `recipe_snapshot` and `ON DELETE SET NULL`.
+- **Faster recipe search & pagination:** SQL `INSTR` search over normalized `search_text` with Greek accent/case-insensitive matching, deterministic ordering, `limit`, and `offset`.
+- **Meal history filtering & idempotent delete:** Filter `meal-list` in SQL by `on`, `from_date`, `to_date`, `limit`, and `offset`; safely retry `meal-remove` with `request_key`.
+- **Read-only variety & frequency stats:** `meal-stats` summarizes `cooked` vs `eaten` counts, distinct dishes, uniqueness ratio, and most-repeated eaten dishes for any date range.
+- **Selective recipe import:** `recipe-import` supports `dry_run` previews, duplicate detection, and `fail`/`skip`/`overwrite`/`new_id` conflict handling without relaxing full-profile `import` protections.
+- **Faster Windows startup:** `prepare_shared_profile` uses a verified fast path on unchanged shared profiles while falling back to full validation whenever source state or WAL sidecars change.
 
 ## See Meal Magic in action
 
@@ -152,14 +155,15 @@ python tools/manage_skill.py install --agent codex
 ```
 
 Choose `--agent claude-code` or `--agent antigravity` instead of `codex` as needed.
-For the **fixed v0.6.3 release snapshot**, check out its tag before testing or
+For the **fixed v0.7.0 release snapshot**, check out its tag before testing or
 installing:
 
 ```text
 git clone https://github.com/alexneverland/meal-magic.git
 cd meal-magic
-git checkout v0.6.3
+git checkout v0.7.0
 python tools/check_repository.py
+python tools/verify_scenarios.py
 python -m unittest discover -s tests -v
 python tools/manage_skill.py install --agent codex
 ```
@@ -168,7 +172,7 @@ Alternatively, get the versioned ZIP from [Releases](https://github.com/alexneve
 
 To inspect an unmerged change, clone its PR branch explicitly in a separate checkout.
 Back up an existing data directory before upgrading: its first successful
-storage request upgrades the database to schema 7.
+storage request upgrades the database to schema 8.
 
 Alternatively, download a source ZIP using GitHub's **Code → Download ZIP** on
 the chosen branch, extract it, and open a terminal beside this README and `tools/`.
@@ -180,6 +184,7 @@ For a checkout/source archive you already have, validate it before installation:
 ```text
 python --version
 python tools/check_repository.py
+python tools/verify_scenarios.py
 python -m unittest discover -s tests -v
 ```
 
@@ -189,7 +194,7 @@ To build a local review archive (without publishing anything):
 python tools/build_package.py
 ```
 
-This writes `dist/meal-magic-0.6.3.zip` and a SHA-256 sidecar. Packaging uses an
+This writes `dist/meal-magic-0.7.0.zip` and a SHA-256 sidecar. Packaging uses an
 explicit source-file allowlist, so databases, caches, personal settings, and
 untracked files cannot enter the archive through directory scanning.
 
@@ -338,7 +343,7 @@ records. A newly initialized empty shell does not take priority over saved data.
 Locale choices, completed/skipped onboarding and retained receipts count as saved
 state. The selected copy is validated/upgraded before atomic publication; original
 databases are preserved. A lock serializes startup across agents. No user-managed
-copy or JSON import is needed. Database schema remains 7.
+copy or JSON import is needed. Database schema upgrades to 8.
 
 If different populated profiles exist, the helper stops with
 `multiple_existing_profiles`. The agent reads `storage-info`, explains the candidate
@@ -407,10 +412,12 @@ into an empty profile; it does not restore source internal retry receipts. See
 ## JSON transfer into an empty profile
 
 Use `import` to move active household data from a Meal Magic JSON export to a
-new profile. This first version accepts schema-6/7 exports and refuses any target
+new profile. It accepts schema-6, 7, or 8 exports and refuses any target
 with records, retained retry receipts, changed locale or non-pending onboarding.
 It never overwrites or merges an existing household. An initialized untouched
-profile is allowed; no delete/reset/force option is provided.
+profile is allowed; no delete/reset/force option is provided. To merge only recipes
+into an existing profile, use `recipe-import` (with `dry_run` preview and explicit
+conflict modes).
 
 The import preserves public record IDs and links, member-scoped restrictions,
 recipes and favorites, exact content/timestamps, actual meal membership and current
@@ -499,14 +506,17 @@ overwrite option. Prefer running the helper as a CLI. On Windows, reparse points
 are checked without following them on every supported Python version, including
 3.10/3.11; project paths retain their original spelling until this check runs.
 
-The manager never opens the personal database. v0.6 uses schema version 7. On the
-first successful storage request, the helper upgrades schema 1, 2, 3, 4, 5 or 6 transactionally.
+The manager never opens the personal database. v0.7.0 uses schema version 8. On the
+first successful storage request, the helper upgrades schema 1, 2, 3, 4, 5, 6, or 7 transactionally.
 Schema 1 gains household members, onboarding state and nullable preference
 ownership; schema 2 gains locale and declared observances; schema 3 gains empty
 plan storage and retry receipts; schema 4 gains an empty meal/member relation.
 Schema 5 gains durable meal-log receipts backfilled from currently active events.
-Schema 6 gains an import-receipt table for safe restoration retries.
-Keys for events already deleted before this upgrade cannot be recovered.
+Schema 6 gains an import-receipt table for safe restoration retries; schema 7 adds
+plan listing indexes. Schema 8 adds `recipes.search_text`, `recipe_requests`,
+`meals.recipe_snapshot`, `ON DELETE SET NULL` on `meals.recipe_id`, and `meals`
+date/kind indexes.
+Keys for events already deleted before the schema-5 upgrade cannot be recovered.
 Older meals remain unspecified and historical meal request keys remain retryable. Existing IDs/content,
 favorites, history, members and ownership remain intact. Old unassigned
 preferences stay unassigned. No family, age, location, belief or practice is
@@ -514,7 +524,7 @@ invented. A completed/skipped schema-2 introduction stays completed/skipped.
 
 Back up the data directory before upgrading. The schema change rolls back if it
 fails. Unknown schema versions/foreign databases are refused, never reset. Once
-schema 7 is committed, older helpers (including v0.5/schema 6) cannot read it:
+schema 8 is committed, older helpers (including v0.6/schema 7 and v0.5/schema 6) cannot read it:
 to roll back, stop all clients
 and restore the matching pre-upgrade data backup, preserving newer data separately.
 

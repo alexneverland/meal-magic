@@ -35,8 +35,8 @@ Precedence: `--data-dir PATH`, then `MEAL_MAGIC_DATA_DIR`, then:
 The file is `meal-magic.sqlite3`. Relative overrides resolve against the process
 working directory; prefer absolute paths. The tool refuses data inside its own
 installed skill. Each command uses a SQLite transaction, foreign keys and a
-10-second lock timeout. Failure rolls the transaction back. Schema version 7 is
-created lazily. Schemas 1/2/3/4/5/6 are upgraded transactionally and additively on the first
+10-second lock timeout. Failure rolls the transaction back. Schema version 8 is
+created lazily. Schemas 1/2/3/4/5/6/7 are upgraded transactionally and additively on the first
 successful request; IDs/content/favorites/history/members/ownership survive.
 Schema-1 preferences gain null ownership and pending onboarding; schema-2
 onboarding status stays unchanged. Locale starts empty with unknown holiday
@@ -48,7 +48,10 @@ Schema 5 gains durable meal-log receipts, backfilled from all currently active
 events and their member links. It cannot recover keys for events already removed
 before this upgrade. Schema 6 gains an empty import-receipt table containing only
 request keys, snapshot hashes and result counts, not the source JSON text.
-Older schema-1/2/3/4/5/6 helpers cannot read the upgraded database;
+Schema 7 adds plan listing indexes, and schema 8 adds `recipes.search_text`,
+`recipe_requests`, `meals.recipe_snapshot`, `ON DELETE SET NULL` on `meals.recipe_id`,
+and `meals` date/kind indexes.
+Older schema-1/2/3/4/5/6/7 helpers cannot read the upgraded database;
 restore the pre-upgrade backup if reverting. Unknown versions or foreign databases
 are refused, never reset.
 The tool does not prune history. Listing limits do not delete stored records.
@@ -73,7 +76,7 @@ states or configured locale count as saved state. With no populated candidate,
 an existing empty shell is retained, or a new profile is initialized after discovery.
 Only a staged copy is migrated/validated. Source writer reservations and a shared
 startup lock prevent competing adoption; atomic no-replace publication never
-overwrites the target. Sources remain intact. The database schema stays at 7.
+overwrites the target. Sources remain intact. The database schema upgrades to 8.
 
 `multiple_existing_profiles`: call `storage-info`, explain candidate counts and ask
 which profile to use. With explicit authorization, pass that exact discovered
