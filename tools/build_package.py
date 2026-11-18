@@ -13,6 +13,7 @@ PUBLIC_FILES = (
     ".github/dependabot.yml", ".github/workflows/ci.yml",
     "docs/demos/meal-variety.gif", "docs/demos/actual-meal-history.gif",
     "docs/demos/recipe-presentation.png", "docs/demos/weekly-meal-history.png",
+    "docs/demos/family-week.md", "docs/demos/family-week.py",
     "skills/meal-magic/SKILL.md", "skills/meal-magic/VERSION", "skills/meal-magic/LICENSE",
     "skills/meal-magic/scripts/meal_store.py", "skills/meal-magic/references/storage-cli.md",
     "skills/meal-magic/references/household.md", "skills/meal-magic/references/occasions.md",
