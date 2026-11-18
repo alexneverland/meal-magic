@@ -20,6 +20,12 @@ See [VERIFICATION.md](VERIFICATION.md) for what was verified automatically and i
 
 ## See Meal Magic in action
 
+In a 32-second Codex demo, a fictional family changes its dinner plans and eats
+leftovers. Meal Magic uses what they actually ate, a recorded dietary restriction,
+and the ingredients on hand to suggest the next dinner.
+[Watch the demo](https://youtu.be/1LTPwSZk2UI) or
+[run the same scenario locally](docs/demos/family-week.md).
+
 These Codex Desktop screenshots show Meal Magic v0.6.3 with separate synthetic
 profiles. Each includes the original question and the answer.
 
